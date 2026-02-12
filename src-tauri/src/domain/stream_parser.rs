@@ -1,4 +1,4 @@
-use crate::models::message::StreamMessage;
+use super::models::StreamMessage;
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -42,7 +42,6 @@ pub fn parse_stream_line(line: &str) -> Option<StreamMessage> {
         Ok(msg) => Some(msg),
         Err(_) => {
             // Not a valid stream-json message; skip silently.
-            // This handles non-JSON stderr leaking into stdout, etc.
             None
         }
     }

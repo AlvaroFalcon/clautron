@@ -1,58 +1,59 @@
+use crate::domain::models::{AgentConfig, AgentSession};
+use crate::domain::session_manager::SessionManager;
 use crate::error::AppError;
-use crate::models::agent::AgentConfig;
-use crate::models::session::AgentSession;
-use crate::services::process_manager::ProcessManager;
 use std::sync::Arc;
 use tauri::State;
 use tokio::process::Command as TokioCommand;
 
 #[tauri::command]
 pub async fn start_agent(
-    app: tauri::AppHandle,
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
     name: String,
     model: String,
     prompt: String,
 ) -> Result<String, AppError> {
-    process_manager
-        .start_agent(app, name, model, prompt)
+    session_manager
+        .start_agent(name, model, prompt)
         .await
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn stop_agent(
-    app: tauri::AppHandle,
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
     session_id: String,
 ) -> Result<(), AppError> {
-    process_manager.stop_agent(&app, &session_id).await
+    session_manager
+        .stop_agent(&session_id)
+        .await
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn resume_agent(
-    app: tauri::AppHandle,
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
     session_id: String,
     prompt: String,
 ) -> Result<String, AppError> {
-    process_manager
-        .resume_agent(app, session_id, prompt)
+    session_manager
+        .resume_agent(session_id, prompt)
         .await
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn list_sessions(
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
 ) -> Result<Vec<AgentSession>, AppError> {
-    Ok(process_manager.list_sessions().await)
+    Ok(session_manager.list_sessions().await)
 }
 
 #[tauri::command]
 pub async fn get_session(
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
     session_id: String,
 ) -> Result<AgentSession, AppError> {
-    process_manager
+    session_manager
         .get_session(&session_id)
         .await
         .ok_or_else(|| AppError::SessionNotFound(session_id))
@@ -60,27 +61,21 @@ pub async fn get_session(
 
 #[tauri::command]
 pub async fn set_project_dir(
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
     path: String,
 ) -> Result<(), AppError> {
-    process_manager.set_project_dir(path).await;
+    session_manager.set_project_dir(path).await;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn get_project_dir(
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
 ) -> Result<Option<String>, AppError> {
-    Ok(process_manager.get_project_dir().await)
+    Ok(session_manager.get_project_dir().await)
 }
 
 /// Check if Claude Code CLI is authenticated.
-/// Runs `claude --print --output-format stream-json --verbose "say hello"`
-/// and inspects the stream-json output for `"error":"authentication_failed"`.
-///
-/// NOTE: This inherits the full environment (no env_clear) because Claude Code
-/// needs various system env vars for credential resolution. This is safe since
-/// it's a read-only diagnostic — no agent code runs.
 #[tauri::command]
 pub async fn check_claude_auth() -> Result<bool, AppError> {
     let mut cmd = TokioCommand::new("claude");
@@ -88,7 +83,6 @@ pub async fn check_claude_auth() -> Result<bool, AppError> {
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.stdin(std::process::Stdio::null());
-    // Inherit full env — this is a diagnostic check, not an agent session
 
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(30),
@@ -100,18 +94,14 @@ pub async fn check_claude_auth() -> Result<bool, AppError> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // The CLI returns stream-json even on auth failure.
-    // On failure, the assistant message contains: "error":"authentication_failed"
     if stdout.contains("\"authentication_failed\"") || stdout.contains("Not logged in") {
         return Ok(false);
     }
 
-    // Successful auth produces a system:init message with subtype "init"
     if stdout.contains("\"subtype\":\"init\"") {
         return Ok(true);
     }
 
-    // CLI not found or other unexpected failure
     Ok(false)
 }
 
@@ -132,12 +122,11 @@ pub async fn open_claude_login() -> Result<(), AppError> {
 }
 
 /// List available agent configurations from .claude/agents/ in the project directory.
-/// Recursively searches subdirectories (e.g. .claude/agents/my-agent/agent.md).
 #[tauri::command]
 pub async fn list_agents(
-    process_manager: State<'_, Arc<ProcessManager>>,
+    session_manager: State<'_, Arc<SessionManager>>,
 ) -> Result<Vec<AgentConfig>, AppError> {
-    let project_dir = process_manager
+    let project_dir = session_manager
         .get_project_dir()
         .await
         .unwrap_or_else(|| ".".to_string());
@@ -167,7 +156,6 @@ fn parse_agent_frontmatter(
     content: &str,
     path: &std::path::Path,
 ) -> Option<AgentConfig> {
-    // Simple frontmatter parser: content between first and second "---"
     let content = content.trim();
     if !content.starts_with("---") {
         return None;
@@ -177,7 +165,6 @@ fn parse_agent_frontmatter(
     let end_idx = after_first.find("---")?;
     let frontmatter = &after_first[..end_idx];
 
-    // Parse key: value pairs from YAML frontmatter
     let mut name = None;
     let mut description = None;
     let mut model = None;

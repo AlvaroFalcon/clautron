@@ -29,3 +29,17 @@ impl Serialize for AppError {
         serializer.serialize_str(&self.to_string())
     }
 }
+
+impl From<crate::domain::error::DomainError> for AppError {
+    fn from(e: crate::domain::error::DomainError) -> Self {
+        match e {
+            crate::domain::error::DomainError::Process(s) => AppError::Process(s),
+            crate::domain::error::DomainError::SessionNotFound(s) => AppError::SessionNotFound(s),
+            crate::domain::error::DomainError::AgentNotFound(s) => AppError::AgentNotFound(s),
+            crate::domain::error::DomainError::Database(s) => AppError::Database(s),
+            crate::domain::error::DomainError::EventEmission(s) => AppError::Process(s),
+            crate::domain::error::DomainError::Io(s) => AppError::Process(s),
+            crate::domain::error::DomainError::Json(s) => AppError::Process(s),
+        }
+    }
+}

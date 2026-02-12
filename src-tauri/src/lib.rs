@@ -1,20 +1,26 @@
+pub mod adapters;
 mod commands;
+pub mod domain;
 mod error;
-mod models;
-mod services;
 
+use adapters::claude_cli_runner::ClaudeCliRunner;
+use adapters::in_memory_session_repository::InMemorySessionRepository;
+use adapters::sqlite_log_repository::SqliteLogRepository;
+use adapters::tauri_event_emitter::TauriEventEmitter;
 use commands::{agent_commands, config_commands, log_commands};
+use domain::ports::LogRepository;
+use domain::session_manager::SessionManager;
 use services::agent_watcher;
 use services::config_store::ConfigStore;
-use services::log_store::LogStore;
-use services::process_manager::ProcessManager;
 use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::RwLock;
+
+// Keep services module for config_store and agent_watcher (no trait needed)
+mod services;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let process_manager = Arc::new(ProcessManager::new());
-
     // Set up app data directory
     let data_dir = dirs::home_dir()
         .map(|h| h.join(".agents-mission-control"))
@@ -30,30 +36,34 @@ pub fn run() {
         }
     }
 
-    // Log store (SQLite)
-    let db_file = data_dir.join("data.db").to_string_lossy().to_string();
-    let log_store = Arc::new(LogStore::new(db_file));
-    process_manager.set_log_store(Arc::clone(&log_store));
+    // --- Adapter construction ---
 
-    // Config store (JSON)
+    // Log repository (SQLite)
+    let db_file = data_dir.join("data.db").to_string_lossy().to_string();
+    let log_repo = Arc::new(SqliteLogRepository::new(db_file));
+
+    // Session repository (in-memory)
+    let session_repo = Arc::new(InMemorySessionRepository::new());
+
+    // Config store (JSON) — no trait, concrete type
     let config_store = Arc::new(ConfigStore::new());
     let config = config_store.load();
 
+    // --- Domain service construction ---
+    // EventEmitter needs AppHandle, which is only available in setup().
+    // We create SessionManager with a placeholder and set the runner later.
+    // Use a two-phase init: create SM first, then runner, then link them.
+
+    // We need the AppHandle from setup, so we defer full wiring.
+    // Store the log_repo and session_repo for later use.
+    let log_repo_for_setup = Arc::clone(&log_repo);
+    let log_repo_for_state: Arc<dyn LogRepository> = Arc::clone(&log_repo) as Arc<dyn LogRepository>;
+    let session_repo_for_state = Arc::clone(&session_repo);
+
     // Restore project dir from saved config
-    if let Some(ref project_path) = config.project_path {
-        let pm = Arc::clone(&process_manager);
-        let path = project_path.clone();
-        tauri::async_runtime::spawn(async move {
-            pm.set_project_dir(path).await;
-        });
-    }
+    let project_path_for_setup = config.project_path.clone();
 
     let config_state: config_commands::ConfigState = Arc::new(RwLock::new(config));
-
-    // Clone references for setup closure and shutdown
-    let log_store_for_setup = Arc::clone(&log_store);
-    let pm_for_watcher = Arc::clone(&process_manager);
-    let pm_for_shutdown = Arc::clone(&process_manager);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -61,19 +71,50 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
         .setup(move |app| {
-            // Initialize SQLite and start periodic flush
-            let ls = Arc::clone(&log_store_for_setup);
+            // --- Wire up hexagonal architecture ---
+            let app_handle = app.handle().clone();
+
+            // EventEmitter adapter (needs AppHandle)
+            let emitter = Arc::new(TauriEventEmitter::new(app_handle.clone()));
+
+            // SessionManager (domain core)
+            let session_manager = Arc::new(SessionManager::new(
+                emitter,
+                log_repo_for_state,
+                session_repo_for_state,
+            ));
+
+            // ClaudeCliRunner adapter (needs SessionManager reference)
+            let runner = Arc::new(ClaudeCliRunner::new(Arc::clone(&session_manager)));
+
+            // Link runner into session manager (breaks circular dep)
+            let sm = Arc::clone(&session_manager);
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = ls.init().await {
+                sm.set_runner(runner).await;
+            });
+
+            // Restore project dir from saved config
+            if let Some(ref project_path) = project_path_for_setup {
+                let sm = Arc::clone(&session_manager);
+                let path = project_path.clone();
+                tauri::async_runtime::spawn(async move {
+                    sm.set_project_dir(path).await;
+                });
+            }
+
+            // Initialize SQLite and start periodic flush
+            let lr = Arc::clone(&log_repo_for_setup);
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = lr.init().await {
                     eprintln!("Failed to init log store: {e}");
                 }
-                ls.start_flush_task();
+                lr.start_flush_task();
             });
 
             // Start FS watcher for .claude/agents/ if project is configured
-            let app_handle = app.handle().clone();
+            let sm_for_watcher = Arc::clone(&session_manager);
             tauri::async_runtime::spawn(async move {
-                if let Some(project_dir) = pm_for_watcher.get_project_dir().await {
+                if let Some(project_dir) = sm_for_watcher.get_project_dir().await {
                     let agents_dir =
                         std::path::PathBuf::from(&project_dir).join(".claude/agents");
                     if let Some(watcher) =
@@ -85,10 +126,12 @@ pub fn run() {
                 }
             });
 
+            // Register SessionManager as managed state
+            app.manage(session_manager);
+
             Ok(())
         })
-        .manage(process_manager)
-        .manage(log_store)
+        .manage(log_repo as Arc<dyn LogRepository>)
         .manage(config_store)
         .manage(config_state)
         .invoke_handler(tauri::generate_handler![
@@ -113,12 +156,15 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(move |_app, event| {
+        .run(move |app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 // Graceful shutdown: stop all running agents
-                tauri::async_runtime::block_on(async {
-                    pm_for_shutdown.shutdown_all().await;
-                });
+                if let Some(sm) = app.try_state::<Arc<SessionManager>>() {
+                    let sm = Arc::clone(&*sm);
+                    tauri::async_runtime::block_on(async {
+                        sm.shutdown_all().await;
+                    });
+                }
             }
         });
 }
