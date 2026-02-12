@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+target/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.sw?
+
+# OS
+.DS_Store
+
+# Local env
+*.local
+
+# Agent memory (may contain sensitive context) - P0 Security #7
+.claude/agent-memory/
+
+# CLI spike (development artifact)
+cli-spike/target/
+
+# App data directory (runtime, not in repo)
+~/.agents-mission-control/
