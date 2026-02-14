@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAgentEvents } from "./hooks/useAgentEvents";
+import { useSpecEvents } from "./hooks/useSpecEvents";
+import { useWorkflowEvents } from "./hooks/useWorkflowEvents";
 import { useAgentStore } from "./stores/agentStore";
+import { useSpecStore } from "./stores/specStore";
+import { useWorkflowStore } from "./stores/workflowStore";
 import { Sidebar } from "./components/layout/Sidebar";
 import { WelcomeScreen } from "./components/layout/WelcomeScreen";
 import { LoginScreen } from "./components/layout/LoginScreen";
@@ -10,16 +14,23 @@ import { AgentApprovalDialog } from "./components/layout/AgentApprovalDialog";
 import { CommandPalette } from "./components/layout/CommandPalette";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { SessionHistoryView } from "./components/history/SessionHistoryView";
+import { CostDashboard } from "./components/history/CostDashboard";
 import { AgentDetailPanel } from "./components/agents/AgentDetailPanel";
 import { StartAgentDialog } from "./components/dashboard/StartAgentDialog";
+import { SpecsView } from "./components/specs/SpecsView";
+import { WorkflowsView } from "./components/workflow/WorkflowsView";
 import { Toaster, toast } from "sonner";
 import * as tauri from "./lib/tauri";
 import type { AgentConfigChangedEvent, UnapprovedAgent } from "./lib/types";
 
 function App() {
   useAgentEvents();
+  useSpecEvents();
+  useWorkflowEvents();
 
   const loadConfigs = useAgentStore((s) => s.loadConfigs);
+  const loadSpecs = useSpecStore((s) => s.loadSpecs);
+  const loadWorkflows = useWorkflowStore((s) => s.loadWorkflows);
   const loadSessions = useAgentStore((s) => s.loadSessions);
   const detailSessionId = useAgentStore((s) => s.detailSessionId);
   const sessions = useAgentStore((s) => s.sessions);
@@ -63,13 +74,15 @@ function App() {
     if (projectPath && isAuthenticated) {
       loadConfigs();
       loadSessions();
+      loadSpecs();
+      loadWorkflows();
       tauri.checkAgentApproval().then((agents) => {
         if (agents.length > 0) {
           setUnapprovedAgents(agents);
         }
       });
     }
-  }, [projectPath, isAuthenticated, loadConfigs, loadSessions]);
+  }, [projectPath, isAuthenticated, loadConfigs, loadSessions, loadSpecs, loadWorkflows]);
 
   // Listen for agent config file changes
   useEffect(() => {
@@ -175,8 +188,14 @@ function App() {
           <AgentDetailPanel session={detailSession} onBack={closeDetail} />
         ) : activeView === "dashboard" ? (
           <DashboardView />
+        ) : activeView === "specs" ? (
+          <SpecsView />
+        ) : activeView === "workflows" ? (
+          <WorkflowsView />
         ) : activeView === "history" ? (
           <SessionHistoryView />
+        ) : activeView === "costs" ? (
+          <CostDashboard />
         ) : activeView === "settings" ? (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
             <p className="text-sm">Settings — coming soon</p>

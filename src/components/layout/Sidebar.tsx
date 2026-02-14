@@ -1,5 +1,7 @@
-import { LayoutDashboard, Settings, History, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Settings, History, FolderOpen, FileText, GitFork, DollarSign } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
+import { useSpecStore } from "../../stores/specStore";
+import { useWorkflowStore } from "../../stores/workflowStore";
 
 interface SidebarProps {
   activeView: string;
@@ -10,7 +12,10 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "specs", label: "Specs", icon: FileText },
+  { id: "workflows", label: "Workflows", icon: GitFork },
   { id: "history", label: "History", icon: History },
+  { id: "costs", label: "Costs", icon: DollarSign },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -22,6 +27,8 @@ export function Sidebar({
 }: SidebarProps) {
   const configs = useAgentStore((s) => s.configs);
   const sessions = useAgentStore((s) => s.sessions);
+  const specCount = useSpecStore((s) => s.specs.length);
+  const workflowCount = useWorkflowStore((s) => s.workflows.length);
 
   const runningCount = Array.from(sessions.values()).filter(
     (s) => s.status === "running" || s.status === "starting",
@@ -79,6 +86,16 @@ export function Sidebar({
             >
               <Icon size={16} />
               {item.label}
+              {item.id === "specs" && specCount > 0 && (
+                <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                  {specCount}
+                </span>
+              )}
+              {item.id === "workflows" && workflowCount > 0 && (
+                <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                  {workflowCount}
+                </span>
+              )}
             </button>
           );
         })}

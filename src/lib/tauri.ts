@@ -1,7 +1,7 @@
 // Typed wrappers for Tauri IPC commands
 
 import { invoke } from "@tauri-apps/api/core";
-import type { AgentConfig, AgentSession, AppConfig, LogEntry, UnapprovedAgent } from "./types";
+import type { AgentConfig, AgentSession, AppConfig, ChangedFile, FileDiff, LogEntry, Spec, SpecPriority, SpecUpdate, UnapprovedAgent, Workflow, WorkflowStep, WorkflowEdge } from "./types";
 
 export async function startAgent(
   name: string,
@@ -90,4 +90,141 @@ export async function approveAgents(
   agents: [string, string][],
 ): Promise<void> {
   return invoke("approve_agents", { agents });
+}
+
+// Spec commands
+
+export async function listSpecs(): Promise<Spec[]> {
+  return invoke("list_specs");
+}
+
+export async function getSpec(filePath: string): Promise<Spec> {
+  return invoke("get_spec", { filePath });
+}
+
+export async function createSpec(
+  title: string,
+  priority: SpecPriority,
+): Promise<Spec> {
+  return invoke("create_spec", { title, priority });
+}
+
+export async function updateSpec(
+  filePath: string,
+  update: SpecUpdate,
+): Promise<Spec> {
+  return invoke("update_spec", { filePath, update });
+}
+
+export async function deleteSpec(filePath: string): Promise<void> {
+  return invoke("delete_spec", { filePath });
+}
+
+export async function runSpec(
+  specPath: string,
+  agentName: string,
+  model: string,
+): Promise<string> {
+  return invoke("run_spec", { specPath, agentName, model });
+}
+
+// Review commands
+
+export async function getChangedFiles(): Promise<ChangedFile[]> {
+  return invoke("get_changed_files");
+}
+
+export async function getDiff(paths?: string[]): Promise<FileDiff[]> {
+  return invoke("get_diff", { paths: paths ?? null });
+}
+
+// Workflow commands
+
+export async function createWorkflow(
+  name: string,
+  description?: string,
+): Promise<Workflow> {
+  return invoke("create_workflow", { name, description: description ?? null });
+}
+
+export async function getWorkflow(id: string): Promise<Workflow> {
+  return invoke("get_workflow", { id });
+}
+
+export async function listWorkflows(): Promise<Workflow[]> {
+  return invoke("list_workflows");
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  return invoke("delete_workflow", { id });
+}
+
+export async function addWorkflowStep(
+  workflowId: string,
+  agentName: string,
+  model: string,
+  prompt: string,
+  specPath: string | null,
+  positionX: number,
+  positionY: number,
+): Promise<WorkflowStep> {
+  return invoke("add_workflow_step", {
+    workflowId,
+    agentName,
+    model,
+    prompt,
+    specPath,
+    positionX,
+    positionY,
+  });
+}
+
+export async function updateWorkflowStep(
+  step: WorkflowStep,
+): Promise<void> {
+  return invoke("update_workflow_step", { step });
+}
+
+export async function removeWorkflowStep(id: string): Promise<void> {
+  return invoke("remove_workflow_step", { id });
+}
+
+export async function getWorkflowSteps(
+  workflowId: string,
+): Promise<WorkflowStep[]> {
+  return invoke("get_workflow_steps", { workflowId });
+}
+
+export async function addWorkflowEdge(
+  workflowId: string,
+  sourceStepId: string,
+  targetStepId: string,
+): Promise<WorkflowEdge> {
+  return invoke("add_workflow_edge", {
+    workflowId,
+    sourceStepId,
+    targetStepId,
+  });
+}
+
+export async function removeWorkflowEdge(id: string): Promise<void> {
+  return invoke("remove_workflow_edge", { id });
+}
+
+export async function getWorkflowEdges(
+  workflowId: string,
+): Promise<WorkflowEdge[]> {
+  return invoke("get_workflow_edges", { workflowId });
+}
+
+export async function startWorkflow(id: string): Promise<void> {
+  return invoke("start_workflow", { id });
+}
+
+export async function stopWorkflow(id: string): Promise<void> {
+  return invoke("stop_workflow", { id });
+}
+
+export async function validateWorkflow(id: string): Promise<void> {
+  return invoke("validate_workflow", { id });
 }

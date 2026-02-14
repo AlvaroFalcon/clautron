@@ -8,6 +8,8 @@ import {
   Settings,
   Eye,
   FolderOpen,
+  FileText,
+  GitFork,
 } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 
@@ -106,6 +108,20 @@ export function CommandPalette({
               >
                 <History size={14} />
                 Go to History
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runAction(() => onViewChange("specs"))}
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-300 aria-selected:bg-surface-2 aria-selected:text-zinc-100"
+              >
+                <FileText size={14} />
+                Go to Specs
+              </Command.Item>
+              <Command.Item
+                onSelect={() => runAction(() => onViewChange("workflows"))}
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-300 aria-selected:bg-surface-2 aria-selected:text-zinc-100"
+              >
+                <GitFork size={14} />
+                Go to Workflows
               </Command.Item>
               <Command.Item
                 onSelect={() => runAction(() => onViewChange("settings"))}

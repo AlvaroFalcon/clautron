@@ -1,5 +1,8 @@
 use super::error::DomainError;
-use super::models::{AgentSession, AgentStatus, LogEntry};
+use super::models::{
+    AgentSession, AgentStatus, LogEntry, StepStatus, Workflow, WorkflowEdge, WorkflowStatus,
+    WorkflowStep,
+};
 use async_trait::async_trait;
 
 // ---------------------------------------------------------------------------
@@ -47,7 +50,7 @@ pub trait AgentRunner: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Domain event: an agent's status changed.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StatusChangedEvent {
     pub session_id: String,
     pub agent_name: String,
@@ -135,4 +138,39 @@ pub trait SessionRepository: Send + Sync {
         input_tokens: u64,
         output_tokens: u64,
     ) -> (u64, u64);
+}
+
+// ---------------------------------------------------------------------------
+// Port: WorkflowRepository — workflow state persistence
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+pub trait WorkflowRepository: Send + Sync {
+    async fn save_workflow(&self, workflow: &Workflow) -> Result<(), DomainError>;
+    async fn get_workflow(&self, id: &str) -> Result<Option<Workflow>, DomainError>;
+    async fn list_workflows(&self) -> Result<Vec<Workflow>, DomainError>;
+    async fn update_workflow_status(
+        &self,
+        id: &str,
+        status: WorkflowStatus,
+    ) -> Result<(), DomainError>;
+    async fn delete_workflow(&self, id: &str) -> Result<(), DomainError>;
+
+    async fn save_step(&self, step: &WorkflowStep) -> Result<(), DomainError>;
+    async fn update_step_status(
+        &self,
+        id: &str,
+        status: StepStatus,
+        session_id: Option<String>,
+    ) -> Result<(), DomainError>;
+    async fn get_steps(&self, workflow_id: &str) -> Result<Vec<WorkflowStep>, DomainError>;
+    async fn update_step(
+        &self,
+        step: &WorkflowStep,
+    ) -> Result<(), DomainError>;
+    async fn delete_step(&self, id: &str) -> Result<(), DomainError>;
+
+    async fn save_edge(&self, edge: &WorkflowEdge) -> Result<(), DomainError>;
+    async fn get_edges(&self, workflow_id: &str) -> Result<Vec<WorkflowEdge>, DomainError>;
+    async fn delete_edge(&self, id: &str) -> Result<(), DomainError>;
 }

@@ -28,6 +28,7 @@ interface AgentState {
   loadSessions: () => Promise<void>;
   startAgent: (name: string, model: string, prompt: string) => Promise<string>;
   stopAgent: (sessionId: string) => Promise<void>;
+  resumeAgent: (sessionId: string, prompt: string) => Promise<string>;
   selectSession: (sessionId: string | null) => void;
   openDetail: (sessionId: string) => void;
   closeDetail: () => void;
@@ -70,6 +71,11 @@ export const useAgentStore = create<AgentState>((set) => ({
   stopAgent: async (sessionId) => {
     await tauri.stopAgent(sessionId);
     // Status will be updated via status-changed event
+  },
+
+  resumeAgent: async (sessionId, prompt) => {
+    const newSessionId = await tauri.resumeAgent(sessionId, prompt);
+    return newSessionId;
   },
 
   selectSession: (sessionId) => {

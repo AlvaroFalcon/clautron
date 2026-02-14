@@ -1,10 +1,11 @@
-import { memo, useState, useEffect } from "react";
-import { Square, Eye } from "lucide-react";
+import { memo, useState, useEffect, useMemo } from "react";
+import { Square, Eye, FileText, GitBranch } from "lucide-react";
 import type { AgentSession } from "../../lib/types";
 import { AGENT_COLORS } from "../../lib/types";
 import { formatElapsed } from "../../lib/formatters";
 import { AgentStatusBadge } from "./AgentStatusBadge";
 import { useAgentStore } from "../../stores/agentStore";
+import { useSpecStore } from "../../stores/specStore";
 
 interface Props {
   session: AgentSession;
@@ -15,7 +16,13 @@ export const AgentCard = memo(function AgentCard({ session, onSelect }: Props) {
   const stopAgent = useAgentStore((s) => s.stopAgent);
   const openDetail = useAgentStore((s) => s.openDetail);
   const logs = useAgentStore((s) => s.logs);
+  const specs = useSpecStore((s) => s.specs);
   const [elapsed, setElapsed] = useState("");
+
+  const linkedSpec = useMemo(
+    () => specs.find((s) => s.assigned_session_id === session.id),
+    [specs, session.id],
+  );
 
   const isActive =
     session.status === "running" || session.status === "starting";
@@ -72,6 +79,14 @@ export const AgentCard = memo(function AgentCard({ session, onSelect }: Props) {
         <AgentStatusBadge status={session.status} />
       </div>
 
+      {/* Linked spec */}
+      {linkedSpec && (
+        <div className="mb-2 flex items-center gap-1 text-[11px] text-purple-400">
+          <FileText size={11} />
+          <span className="truncate">{linkedSpec.title}</span>
+        </div>
+      )}
+
       {/* Prompt snippet */}
       <p className="mb-3 line-clamp-2 text-xs text-zinc-400">
         {session.prompt}
@@ -97,6 +112,18 @@ export const AgentCard = memo(function AgentCard({ session, onSelect }: Props) {
           >
             <Eye size={14} />
           </button>
+          {session.status === "completed" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openDetail(session.id);
+              }}
+              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-purple-900/30 hover:text-purple-400"
+              title="Review output"
+            >
+              <GitBranch size={14} />
+            </button>
+          )}
           {isActive && (
             <button
               onClick={(e) => {

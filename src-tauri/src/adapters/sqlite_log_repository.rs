@@ -131,16 +131,22 @@ impl SqliteLogRepository {
     /// Initialize the SQLite database and run migrations.
     pub async fn init(&self) -> Result<(), DomainError> {
         let db = self.connect().await?;
-        let migration = include_str!("../../migrations/001_initial.sql");
-        for statement in migration.split(';') {
-            let stmt = statement.trim();
-            if stmt.is_empty() {
-                continue;
+        let migrations = [
+            include_str!("../../migrations/001_initial.sql"),
+            include_str!("../../migrations/002_file_changes.sql"),
+            include_str!("../../migrations/003_workflows.sql"),
+        ];
+        for migration in &migrations {
+            for statement in migration.split(';') {
+                let stmt = statement.trim();
+                if stmt.is_empty() {
+                    continue;
+                }
+                sqlx::query(stmt)
+                    .execute(&db)
+                    .await
+                    .map_err(|e| DomainError::Database(format!("{e}: {stmt}")))?;
             }
-            sqlx::query(stmt)
-                .execute(&db)
-                .await
-                .map_err(|e| DomainError::Database(format!("{e}: {stmt}")))?;
         }
         db.close().await;
         Ok(())

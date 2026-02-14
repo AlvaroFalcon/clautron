@@ -1,2 +1,7 @@
 pub mod agent_watcher;
 pub mod config_store;
+pub mod git_service;
+pub mod spec_manager;
+pub mod spec_parser;
+pub mod spec_watcher;
+pub mod workflow_engine;
