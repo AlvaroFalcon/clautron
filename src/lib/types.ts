@@ -222,6 +222,8 @@ export interface WorkflowStep {
   position_x: number;
   position_y: number;
   created_at: string;
+  pass_context: boolean;
+  result_output: string | null;
 }
 
 export interface WorkflowEdge {

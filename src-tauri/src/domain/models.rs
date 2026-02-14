@@ -208,6 +208,8 @@ pub struct WorkflowStep {
     pub position_x: f64,
     pub position_y: f64,
     pub created_at: String,
+    pub pass_context: bool,
+    pub result_output: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

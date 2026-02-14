@@ -135,6 +135,7 @@ impl SqliteLogRepository {
             include_str!("../../migrations/001_initial.sql"),
             include_str!("../../migrations/002_file_changes.sql"),
             include_str!("../../migrations/003_workflows.sql"),
+            include_str!("../../migrations/004_workflow_context.sql"),
         ];
         for migration in &migrations {
             for statement in migration.split(';') {
@@ -142,10 +143,15 @@ impl SqliteLogRepository {
                 if stmt.is_empty() {
                     continue;
                 }
-                sqlx::query(stmt)
-                    .execute(&db)
-                    .await
-                    .map_err(|e| DomainError::Database(format!("{e}: {stmt}")))?;
+                if let Err(e) = sqlx::query(stmt).execute(&db).await {
+                    // Tolerate "duplicate column name" errors from ALTER TABLE
+                    // so migrations are idempotent across app restarts.
+                    let msg = e.to_string();
+                    if msg.contains("duplicate column name") {
+                        continue;
+                    }
+                    return Err(DomainError::Database(format!("{e}: {stmt}")));
+                }
             }
         }
         db.close().await;

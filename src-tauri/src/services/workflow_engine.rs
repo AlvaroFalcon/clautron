@@ -1,25 +1,31 @@
 use crate::domain::error::DomainError;
 use crate::domain::models::*;
-use crate::domain::ports::WorkflowRepository;
+use crate::domain::ports::{LogRepository, WorkflowRepository};
 use crate::domain::session_manager::SessionManager;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+/// Max size for captured result output (50KB) to prevent context explosion.
+const MAX_RESULT_OUTPUT_LEN: usize = 50 * 1024;
 
 /// Workflow execution engine. Resolves DAG dependencies and launches
 /// agent steps in the correct order (parallel when possible).
 pub struct WorkflowEngine {
     repo: Arc<dyn WorkflowRepository>,
     session_manager: Arc<SessionManager>,
+    logs: Arc<dyn LogRepository>,
 }
 
 impl WorkflowEngine {
     pub fn new(
         repo: Arc<dyn WorkflowRepository>,
         session_manager: Arc<SessionManager>,
+        logs: Arc<dyn LogRepository>,
     ) -> Self {
         Self {
             repo,
             session_manager,
+            logs,
         }
     }
 
@@ -138,6 +144,15 @@ impl WorkflowEngine {
                         .repo
                         .update_step_status(&step.id, StepStatus::Completed, None)
                         .await;
+
+                    // Capture result output for context passing
+                    self.logs.flush().await;
+                    if let Ok(logs) = self.logs.query_logs(session_id, 0, 1000).await {
+                        if let Some(output) = extract_result_text(&logs) {
+                            let _ = self.repo.update_step_result(&step.id, &output).await;
+                        }
+                    }
+
                     let _ = self.advance(&wf.id).await;
                     return Some(wf.id.clone());
                 }
@@ -203,13 +218,40 @@ impl WorkflowEngine {
                 .all(|e| completed.contains(&e.source_step_id));
 
             if all_deps_met {
+                // Build effective prompt, injecting parent context if enabled
+                let effective_prompt = if step.pass_context {
+                    let parent_steps: Vec<&WorkflowStep> = deps
+                        .iter()
+                        .filter_map(|e| steps.iter().find(|s| s.id == e.source_step_id))
+                        .collect();
+                    let context_parts: Vec<String> = parent_steps
+                        .iter()
+                        .filter_map(|ps| {
+                            ps.result_output.as_ref().map(|out| {
+                                format!("=== Output from '{}' ===\n{}", ps.agent_name, out)
+                            })
+                        })
+                        .collect();
+                    if context_parts.is_empty() {
+                        step.prompt.clone()
+                    } else {
+                        format!(
+                            "Context from previous workflow steps:\n\n{}\n\n---\n\nYour task:\n{}",
+                            context_parts.join("\n\n"),
+                            step.prompt
+                        )
+                    }
+                } else {
+                    step.prompt.clone()
+                };
+
                 // Start this step
                 match self
                     .session_manager
                     .start_agent(
                         step.agent_name.clone(),
                         step.model.clone(),
-                        step.prompt.clone(),
+                        effective_prompt,
                     )
                     .await
                 {
@@ -250,5 +292,64 @@ impl WorkflowEngine {
         }
 
         Ok(())
+    }
+}
+
+/// Extract the final result text from a session's log entries.
+/// Searches in reverse for a `result` message first, falling back to the last `assistant` message.
+/// Truncates to MAX_RESULT_OUTPUT_LEN to prevent context explosion.
+fn extract_result_text(logs: &[LogEntry]) -> Option<String> {
+    // Try to find the last result message
+    for log in logs.iter().rev() {
+        if log.message_type == "result" {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&log.content) {
+                if let Some(text) = parsed.get("result").and_then(|r| r.as_str()) {
+                    return Some(truncate_str(text, MAX_RESULT_OUTPUT_LEN));
+                }
+            }
+        }
+    }
+
+    // Fall back to last assistant message
+    for log in logs.iter().rev() {
+        if log.message_type == "assistant" {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&log.content) {
+                // Try message.content array (Claude Code format)
+                if let Some(content) = parsed
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_array())
+                {
+                    let text: String = content
+                        .iter()
+                        .filter_map(|block| {
+                            if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                                block.get("text").and_then(|t| t.as_str()).map(String::from)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    if !text.is_empty() {
+                        return Some(truncate_str(&text, MAX_RESULT_OUTPUT_LEN));
+                    }
+                }
+            }
+            // If JSON parsing fails, use raw content as fallback
+            if !log.content.is_empty() {
+                return Some(truncate_str(&log.content, MAX_RESULT_OUTPUT_LEN));
+            }
+        }
+    }
+
+    None
+}
+
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}... [truncated]", &s[..max_len])
     }
 }

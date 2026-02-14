@@ -115,8 +115,8 @@ impl WorkflowRepository for SqliteWorkflowRepository {
     async fn save_step(&self, s: &WorkflowStep) -> Result<(), DomainError> {
         let db = self.connect().await?;
         sqlx::query(
-            "INSERT INTO workflow_steps (id, workflow_id, agent_name, model, prompt, spec_path, status, session_id, position_x, position_y, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO workflow_steps (id, workflow_id, agent_name, model, prompt, spec_path, status, session_id, position_x, position_y, created_at, pass_context, result_output)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&s.id)
         .bind(&s.workflow_id)
@@ -129,6 +129,8 @@ impl WorkflowRepository for SqliteWorkflowRepository {
         .bind(s.position_x)
         .bind(s.position_y)
         .bind(&s.created_at)
+        .bind(s.pass_context)
+        .bind(&s.result_output)
         .execute(&db)
         .await
         .map_err(|e| DomainError::Database(e.to_string()))?;
@@ -156,8 +158,8 @@ impl WorkflowRepository for SqliteWorkflowRepository {
 
     async fn get_steps(&self, workflow_id: &str) -> Result<Vec<WorkflowStep>, DomainError> {
         let db = self.connect().await?;
-        let rows = sqlx::query_as::<_, (String, String, String, String, String, Option<String>, String, Option<String>, f64, f64, String)>(
-            "SELECT id, workflow_id, agent_name, model, prompt, spec_path, status, session_id, position_x, position_y, created_at FROM workflow_steps WHERE workflow_id = ?",
+        let rows = sqlx::query_as::<_, (String, String, String, String, String, Option<String>, String, Option<String>, f64, f64, String, i32, Option<String>)>(
+            "SELECT id, workflow_id, agent_name, model, prompt, spec_path, status, session_id, position_x, position_y, created_at, pass_context, result_output FROM workflow_steps WHERE workflow_id = ?",
         )
         .bind(workflow_id)
         .fetch_all(&db)
@@ -178,6 +180,8 @@ impl WorkflowRepository for SqliteWorkflowRepository {
                 position_x: r.8,
                 position_y: r.9,
                 created_at: r.10,
+                pass_context: r.11 != 0,
+                result_output: r.12,
             })
             .collect())
     }
@@ -185,7 +189,7 @@ impl WorkflowRepository for SqliteWorkflowRepository {
     async fn update_step(&self, s: &WorkflowStep) -> Result<(), DomainError> {
         let db = self.connect().await?;
         sqlx::query(
-            "UPDATE workflow_steps SET agent_name = ?, model = ?, prompt = ?, spec_path = ?, position_x = ?, position_y = ? WHERE id = ?",
+            "UPDATE workflow_steps SET agent_name = ?, model = ?, prompt = ?, spec_path = ?, position_x = ?, position_y = ?, pass_context = ? WHERE id = ?",
         )
         .bind(&s.agent_name)
         .bind(&s.model)
@@ -193,10 +197,23 @@ impl WorkflowRepository for SqliteWorkflowRepository {
         .bind(&s.spec_path)
         .bind(s.position_x)
         .bind(s.position_y)
+        .bind(s.pass_context)
         .bind(&s.id)
         .execute(&db)
         .await
         .map_err(|e| DomainError::Database(e.to_string()))?;
+        db.close().await;
+        Ok(())
+    }
+
+    async fn update_step_result(&self, id: &str, result_output: &str) -> Result<(), DomainError> {
+        let db = self.connect().await?;
+        sqlx::query("UPDATE workflow_steps SET result_output = ? WHERE id = ?")
+            .bind(result_output)
+            .bind(id)
+            .execute(&db)
+            .await
+            .map_err(|e| DomainError::Database(e.to_string()))?;
         db.close().await;
         Ok(())
     }

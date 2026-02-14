@@ -43,7 +43,7 @@ export function WorkflowsView() {
         </button>
       </div>
 
-      <PanelGroup direction="horizontal" className="flex-1">
+      <PanelGroup direction="horizontal" className="flex-1 min-h-0" style={{ minHeight: 240 }}>
         <Panel defaultSize={75} minSize={50}>
           <WorkflowCanvas
             workflowId={activeWorkflowId}

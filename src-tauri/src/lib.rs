@@ -68,6 +68,7 @@ pub fn run() {
     // Store the log_repo and session_repo for later use.
     let log_repo_for_setup = Arc::clone(&log_repo);
     let log_repo_for_state: Arc<dyn LogRepository> = Arc::clone(&log_repo) as Arc<dyn LogRepository>;
+    let log_repo_for_engine: Arc<dyn LogRepository> = Arc::clone(&log_repo) as Arc<dyn LogRepository>;
     let session_repo_for_state = Arc::clone(&session_repo);
 
     // Restore project dir from saved config
@@ -161,10 +162,11 @@ pub fn run() {
                 }
             });
 
-            // Workflow engine (needs session_manager + repo)
+            // Workflow engine (needs session_manager + repo + logs)
             let workflow_engine = Arc::new(WorkflowEngine::new(
                 Arc::clone(&workflow_repo),
                 Arc::clone(&session_manager),
+                log_repo_for_engine,
             ));
             app.manage(workflow_engine);
 

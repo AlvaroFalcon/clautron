@@ -167,6 +167,7 @@ export async function addWorkflowStep(
   specPath: string | null,
   positionX: number,
   positionY: number,
+  passContext?: boolean,
 ): Promise<WorkflowStep> {
   return invoke("add_workflow_step", {
     workflowId,
@@ -176,6 +177,7 @@ export async function addWorkflowStep(
     specPath,
     positionX,
     positionY,
+    passContext: passContext ?? false,
   });
 }
 

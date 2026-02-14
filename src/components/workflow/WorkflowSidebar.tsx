@@ -25,12 +25,15 @@ export function WorkflowSidebar({ workflowId, selectedStepId }: Props) {
   const [agentName, setAgentName] = useState("");
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [passContext, setPassContext] = useState(false);
 
   useEffect(() => {
     if (selectedStep) {
       setAgentName(selectedStep.agent_name);
       setModel(selectedStep.model);
       setPrompt(selectedStep.prompt);
+      // Guard: pass_context may be missing on older data; never set undefined for controlled checkbox
+      setPassContext(Boolean(selectedStep.pass_context));
     }
   }, [selectedStep]);
 
@@ -41,6 +44,7 @@ export function WorkflowSidebar({ workflowId, selectedStepId }: Props) {
       agent_name: agentName,
       model,
       prompt,
+      pass_context: passContext,
     });
   };
 
@@ -111,6 +115,20 @@ export function WorkflowSidebar({ workflowId, selectedStepId }: Props) {
             />
           </div>
 
+          {/* Pass Context */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="passContext"
+              checked={passContext}
+              onChange={(e) => setPassContext(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-600 bg-surface-0"
+            />
+            <label htmlFor="passContext" className="text-[11px] text-zinc-400">
+              Pass context from parent steps
+            </label>
+          </div>
+
           {/* Status */}
           <div>
             <label className="mb-1 block text-[11px] font-medium text-zinc-400">
@@ -123,6 +141,19 @@ export function WorkflowSidebar({ workflowId, selectedStepId }: Props) {
               </p>
             )}
           </div>
+
+          {/* Result Output (shown when step has completed with output) */}
+          {selectedStep.result_output && (
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-zinc-400">
+                Output
+              </label>
+              <pre className="max-h-32 overflow-auto rounded bg-surface-0 p-2 text-[10px] text-zinc-400">
+                {selectedStep.result_output.slice(0, 500)}
+                {selectedStep.result_output.length > 500 && "..."}
+              </pre>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">

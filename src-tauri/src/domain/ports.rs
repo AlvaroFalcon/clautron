@@ -170,6 +170,8 @@ pub trait WorkflowRepository: Send + Sync {
     ) -> Result<(), DomainError>;
     async fn delete_step(&self, id: &str) -> Result<(), DomainError>;
 
+    async fn update_step_result(&self, id: &str, result_output: &str) -> Result<(), DomainError>;
+
     async fn save_edge(&self, edge: &WorkflowEdge) -> Result<(), DomainError>;
     async fn get_edges(&self, workflow_id: &str) -> Result<Vec<WorkflowEdge>, DomainError>;
     async fn delete_edge(&self, id: &str) -> Result<(), DomainError>;

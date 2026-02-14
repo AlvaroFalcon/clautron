@@ -58,6 +58,7 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: Props) {
   const storeSteps = useWorkflowStore((s) => s.steps.get(workflowId) ?? []);
   const storeEdges = useWorkflowStore((s) => s.edges.get(workflowId) ?? []);
   const workflows = useWorkflowStore((s) => s.workflows);
+
   const addStepAction = useWorkflowStore((s) => s.addStep);
   const updateStep = useWorkflowStore((s) => s.updateStep);
   const removeStepAction = useWorkflowStore((s) => s.removeStep);
@@ -222,8 +223,8 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: Props) {
         )}
       </div>
 
-      {/* Canvas */}
-      <div style={{ width: "100%", flex: 1 }}>
+      {/* Canvas — min-h-0 lets flex shrink; minHeight avoids black area when empty */}
+      <div className="min-h-0 flex-1 w-full" style={{ minHeight: 200 }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -255,6 +256,13 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: Props) {
             maskColor="rgba(0,0,0,0.7)"
             className="!border-zinc-700 !bg-surface-1"
           />
+          {nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <p className="text-sm text-zinc-500">
+                No steps yet. Click <strong>Add Step</strong> above to add an agent.
+              </p>
+            </div>
+          )}
         </ReactFlow>
       </div>
     </div>

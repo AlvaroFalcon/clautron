@@ -66,6 +66,7 @@ pub async fn add_workflow_step(
     spec_path: Option<String>,
     position_x: f64,
     position_y: f64,
+    pass_context: Option<bool>,
 ) -> Result<WorkflowStep, AppError> {
     let step = WorkflowStep {
         id: Uuid::new_v4().to_string(),
@@ -79,6 +80,8 @@ pub async fn add_workflow_step(
         position_x,
         position_y,
         created_at: Utc::now().to_rfc3339(),
+        pass_context: pass_context.unwrap_or(false),
+        result_output: None,
     };
     repo.save_step(&step).await.map_err(AppError::from)?;
     Ok(step)
