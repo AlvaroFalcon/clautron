@@ -1,4 +1,4 @@
-# Agents Mission Control -- Architecture Document
+# Clautron -- Architecture Document
 
 **Version**: 0.1.0
 **Date**: 2025-02-12
@@ -26,7 +26,7 @@
 
 ## 1. Executive Summary
 
-Agents Mission Control is a macOS desktop application that provides a visual
+Clautron is a macOS desktop application that provides a visual
 dashboard for orchestrating and monitoring Claude Code agents. It allows users
 to author specifications, dispatch them to agents, observe real-time behavior
 (reads, writes, tool calls), visualize agent relationships, and control agent
@@ -165,7 +165,7 @@ greenfield project unless specifically requested.
 
 ```
 +------------------------------------------------------------------+
-|                    Agents Mission Control                          |
+|                    Clautron                          |
 |                                                                    |
 |  +---------------------------+  +------------------------------+  |
 |  |     Tauri Rust Backend    |  |    React Frontend (WebView)  |  |
@@ -716,16 +716,16 @@ CREATE INDEX idx_log_entries_type ON log_entries(session_id, type);
 CREATE INDEX idx_spec_executions_spec ON spec_executions(spec_id);
 ```
 
-**Location**: `~/.agents-mission-control/data.db`
+**Location**: `~/.clautron/data.db`
 
 ### 8.2 File System for Large/Mutable Content
 
-- **Specs**: Also stored as `.md` files in `~/.agents-mission-control/specs/`
+- **Specs**: Also stored as `.md` files in `~/.clautron/specs/`
   for easy editing outside the app. SQLite record points to the file.
 - **Agent configs**: Read directly from `.claude/agents/` (source of truth is
   the project directory, not our database).
 - **Log archives**: Old sessions' logs are exported to compressed JSON files
-  in `~/.agents-mission-control/archives/` and removed from SQLite to keep
+  in `~/.clautron/archives/` and removed from SQLite to keep
   the database small.
 
 ### 8.3 In-Memory Buffers
@@ -938,7 +938,7 @@ The log viewer is the most performance-critical UI component. Strategy:
 ## 12. Project Structure
 
 ```
-agents-mission-control/
+clautron/
   .claude/
     agents/                          -- Agent definitions (existing)
       app-architect.md

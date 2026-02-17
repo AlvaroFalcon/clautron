@@ -33,8 +33,8 @@ struct SpecStatusChangedPayload {
 pub fn run() {
     // Set up app data directory
     let data_dir = dirs::home_dir()
-        .map(|h| h.join(".agents-mission-control"))
-        .unwrap_or_else(|| std::path::PathBuf::from(".agents-mission-control"));
+        .map(|h| h.join(".clautron"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".clautron"));
 
     // Ensure the directory exists with 0700 permissions (P0 Security #6)
     if !data_dir.exists() {

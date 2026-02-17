@@ -1,11 +1,11 @@
 [package]
-name = "agents-mission-control"
+name = "clautron"
 version = "0.1.0"
-description = "Desktop app for orchestrating Claude Code agents"
+description = "Clautron - Desktop app for orchestrating Claude Code agents"
 edition = "2021"
 
 [lib]
-name = "agents_mission_control_lib"
+name = "clautron_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

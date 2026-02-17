@@ -1,8 +1,8 @@
-# CLAUDE.md -- Agents Mission Control
+# CLAUDE.md -- Clautron
 
 ## Project Overview
 
-Agents Mission Control is a macOS desktop application for orchestrating, monitoring, and controlling Claude Code agents. It replaces the workflow of juggling multiple terminal windows with a unified visual command center.
+Clautron is a macOS desktop application for orchestrating, monitoring, and controlling Claude Code agents. It replaces the workflow of juggling multiple terminal windows with a unified visual command center.
 
 **Value proposition**: "Stop babysitting terminals. Start commanding agents."
 
@@ -118,7 +118,7 @@ Status-change events bypass the batch and emit immediately.
 
 1. **Tauri over Electron**: Smaller binary, Rust backend ideal for process management, stricter security model. Trade-off: smaller ecosystem.
 2. **Zustand over Redux/Context**: High-frequency log updates would cause re-render storms with Context; Redux is too much boilerplate for this scale.
-3. **SQLite over JSON files**: Structured queries, indexing, single file. Stored at `~/.agents-mission-control/data.db`.
+3. **SQLite over JSON files**: Structured queries, indexing, single file. Stored at `~/.clautron/data.db`.
 4. **Ring buffers for logs**: Predictable memory usage. 10k entries per agent in Rust, 5k in React frontend.
 5. **Pause = stop + resume**: Claude Code CLI does not support SIGSTOP/SIGCONT. "Pause" means SIGTERM then `--resume <session-id>` with continuation prompt.
 6. **Desktop app over VS Code extension**: Agent orchestration is a parallel activity to coding; needs persistent screen real estate; editor-agnostic.
@@ -167,7 +167,7 @@ These are non-negotiable for any code written in this project. See the full thre
 ### Project Structure
 
 ```
-agents-mission-control/
+clautron/
   src-tauri/                    # Rust backend
     src/
       main.rs                   # Tauri app setup
@@ -259,7 +259,7 @@ Existing tools and our differentiation:
 
 1. **Monetization model**: Open-source? Freemium? Affects whether we need a server component.
 2. **Agent scope**: Claude Code only, or extensible to other AI agents (Cursor, Copilot)? Current plan: Claude Code first with adapter pattern.
-3. **MCP Server mode**: Should Mission Control itself become an MCP server that agents connect to? Documented as Phase 2 extension point.
+3. **MCP Server mode**: Should Clautron itself become an MCP server that agents connect to? Documented as Phase 2 extension point.
 4. **Input streaming**: Claude Code supports `--input-format stream-json` for bidirectional streaming. Could enable sending messages to running agents without restarting. Evaluate after MVP.
 5. **Multi-project support**: Single project or multiple? Current plan: single project for MVP, multi-project in Phase 3.
 6. **Plugin architecture**: Third-party extensions for custom node renderers, log parsers, integrations. Phase 2 concern.

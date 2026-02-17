@@ -30,7 +30,7 @@ export function WelcomeScreen({ onProjectSelected }: WelcomeScreenProps) {
 
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Agents Mission Control
+            Clautron
           </h1>
           <p className="mt-2 text-sm text-zinc-400">
             Orchestrate, monitor, and control your Claude Code agents from a

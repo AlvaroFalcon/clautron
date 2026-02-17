@@ -1,4 +1,4 @@
-# Agents Mission Control - Product Requirements Document
+# Clautron - Product Requirements Document
 
 **Version**: 0.1 (Initial)
 **Date**: 2025-02-12
@@ -8,7 +8,7 @@
 
 ## 1. Product Vision
 
-Agents Mission Control is a desktop application that gives developers a visual command center for orchestrating, monitoring, and controlling Claude Code agents. It transforms the experience of working with multiple AI agents from a purely CLI-based, text-heavy workflow into a structured, visual, and controllable process.
+Clautron is a desktop application that gives developers a visual command center for orchestrating, monitoring, and controlling Claude Code agents. It transforms the experience of working with multiple AI agents from a purely CLI-based, text-heavy workflow into a structured, visual, and controllable process.
 
 **One-line pitch**: The IDE for agent orchestration -- see what your agents are doing, control how they work, and focus on writing specs instead of babysitting terminals.
 
@@ -99,7 +99,7 @@ These features move from passive monitoring to active orchestration and spec-dri
 ### Flow 1: Starting a New Multi-Agent Task
 
 ```
-1. User opens Agents Mission Control
+1. User opens Clautron
 2. User selects project directory (or app remembers last project)
 3. App scans .claude/agents/ and displays available agent templates
 4. User creates a new "Run" (a named session grouping multiple agents)
@@ -320,7 +320,7 @@ Spacecake (spacecake-labs/spacecake) is the closest comparable tool -- an
 Electron-based desktop app for Claude Code with an embedded Ghostty terminal,
 Lexical rich-text editor, and live task tracking. Key differences:
 
-| Dimension | Spacecake | Agents Mission Control |
+| Dimension | Spacecake | Clautron |
 |-----------|-----------|----------------------|
 | **Agent model** | Single agent, single workspace | Multi-agent orchestration with concurrent sessions |
 | **Workflow** | No workflow builder | Visual DAG-based workflow builder (ReactFlow) |
@@ -340,7 +340,7 @@ our interactive ReactFlow workflow builder.
 
 ### 6.2 What Makes This Different from Using Claude Code CLI Directly?
 
-| Dimension | Claude Code CLI | Agents Mission Control |
+| Dimension | Claude Code CLI | Clautron |
 |-----------|----------------|----------------------|
 | **Visibility** | One terminal per agent, text-only | Unified dashboard, all agents at a glance |
 | **Intervention speed** | Must notice the problem in scrolling text, switch terminals | Instant visual status + desktop notifications, one-click drill-down |
@@ -354,7 +354,7 @@ our interactive ReactFlow workflow builder.
 
 **"Stop babysitting terminals. Start commanding agents."**
 
-The core insight: as AI agents become more capable, the bottleneck shifts from *writing code* to *orchestrating, monitoring, and reviewing agent work*. Agents Mission Control is purpose-built for this new workflow where the developer's job is to:
+The core insight: as AI agents become more capable, the bottleneck shifts from *writing code* to *orchestrating, monitoring, and reviewing agent work*. Clautron is purpose-built for this new workflow where the developer's job is to:
 
 1. Define *what* needs to be built (specs)
 2. Assign the right agent to each task (orchestration)

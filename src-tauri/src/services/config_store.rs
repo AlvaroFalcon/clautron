@@ -2,7 +2,7 @@ use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Persistent app configuration stored at ~/.agents-mission-control/config.json
+/// Persistent app configuration stored at ~/.clautron/config.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub project_path: Option<String>,
@@ -21,8 +21,8 @@ pub struct ConfigStore {
 impl ConfigStore {
     pub fn new() -> Self {
         let config_dir = dirs::home_dir()
-            .map(|h| h.join(".agents-mission-control"))
-            .unwrap_or_else(|| PathBuf::from(".agents-mission-control"));
+            .map(|h| h.join(".clautron"))
+            .unwrap_or_else(|| PathBuf::from(".clautron"));
 
         Self {
             config_path: config_dir.join("config.json"),

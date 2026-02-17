@@ -1,4 +1,4 @@
-# MVP Implementation Plan -- Agents Mission Control
+# MVP Implementation Plan -- Clautron
 
 ## Current Progress
 
@@ -40,7 +40,7 @@
 - `LogStore` (Rust) -- SQLite persistence with batched writes (100 entries or 500ms flush interval), `get_session_logs` and `get_session_log_count` queries
 - `ProcessManager` updated to persist all log events to LogStore alongside frontend emission
 - `log_commands.rs` -- IPC commands for `get_session_logs` and `get_session_log_count`
-- Database directory created at `~/.agents-mission-control/` with 0700 permissions (P0 Security #6)
+- Database directory created at `~/.clautron/` with 0700 permissions (P0 Security #6)
 - Frontend TypeScript wrappers added for log query commands
 - Full build compiles and app bundles successfully
 
@@ -50,7 +50,7 @@
 
 ### Context
 
-Agents Mission Control is a macOS desktop app (Tauri v2 + React 19) for orchestrating multiple Claude Code agents. The project has comprehensive design docs (PRD, architecture, threat model) but started with zero implementation code. This plan breaks the MVP into 7 incremental milestones, each producing a testable deliverable, front-loading the highest-risk work (CLI integration) and baking in P0 security from day one.
+Clautron is a macOS desktop app (Tauri v2 + React 19) for orchestrating multiple Claude Code agents. The project has comprehensive design docs (PRD, architecture, threat model) but started with zero implementation code. This plan breaks the MVP into 7 incremental milestones, each producing a testable deliverable, front-loading the highest-risk work (CLI integration) and baking in P0 security from day one.
 
 **MVP acceptance**: Open app, point at project, start 3 agents, watch progress in real-time, see error, stop it, review outputs -- all without a terminal.
 
@@ -67,7 +67,7 @@ Agents Mission Control is a macOS desktop app (Tauri v2 + React 19) for orchestr
 - Full build compiles and bundles successfully
 
 ### Milestone 6: Project Context + Agent Configuration -- COMPLETE
-- `config_store.rs` -- Persistent app config at `~/.agents-mission-control/config.json` with 0600 permissions (P0 Security #6)
+- `config_store.rs` -- Persistent app config at `~/.clautron/config.json` with 0600 permissions (P0 Security #6)
 - `agent_watcher.rs` -- FS watcher via `notify` crate, debounced 500ms, emits `agents:config-changed` event on .md file changes
 - `config_commands.rs` -- IPC commands: get_config, save_config, set_project_path, get_project_path, check_agent_approval, approve_agents
 - SHA-256 hash-based agent approval system (P0 Security #4): stores approved file hashes, detects new/changed agents
@@ -132,7 +132,7 @@ Agents Mission Control is a macOS desktop app (Tauri v2 + React 19) for orchestr
 | # | Task | Details |
 |---|------|---------|
 | 1 | Project selection flow | Welcome screen on first launch. Tauri `dialog` plugin for native file picker |
-| 2 | Config persistence | Store project_path, window_size in `~/.agents-mission-control/config.json`. File 0600 |
+| 2 | Config persistence | Store project_path, window_size in `~/.clautron/config.json`. File 0600 |
 | 3 | Agent definition security prompt | On new/changed agents: confirmation dialog. Store approved file hashes (P0 #4) |
 | 4 | FS watcher for `.claude/agents/` | `notify` crate, debounced 500ms. Re-read configs, prompt if changed |
 | 5 | Project info in sidebar | Project name, path, agent count, active sessions |
@@ -192,7 +192,7 @@ Agents Mission Control is a macOS desktop app (Tauri v2 + React 19) for orchestr
 ## Key Files
 
 ```
-agents-mission-control/
+clautron/
   cli-spike/                          # M1: Standalone validation binary
     Cargo.toml
     src/main.rs
@@ -276,7 +276,7 @@ agents-mission-control/
 
 ## How to Resume
 
-1. `cd /Users/alvaro/Documents/Proyectos/personal/agents-mission-control`
+1. `cd` into the clautron project directory
 2. All 7 milestones are complete. MVP is ready for end-to-end testing.
 3. Run `npm run tauri dev` for development or `npm run tauri build` for production.
 4. Post-MVP work: Spec management (Iteration 4), Workflow engine (Iteration 5)

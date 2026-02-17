@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    agents_mission_control_lib::run()
+    clautron_lib::run()
 }
