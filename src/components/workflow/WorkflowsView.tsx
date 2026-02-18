@@ -44,18 +44,22 @@ export function WorkflowsView() {
       </div>
 
       <PanelGroup direction="horizontal" className="flex-1 min-h-0" style={{ minHeight: 240 }}>
-        <Panel defaultSize={75} minSize={50}>
-          <WorkflowCanvas
-            workflowId={activeWorkflowId}
-            onNodeSelect={setSelectedStepId}
-          />
+        <Panel defaultSize={75} minSize={50} style={{ minHeight: 0 }}>
+          <div className="h-full min-h-0 min-w-0" style={{ height: "100%", minHeight: 200 }}>
+            <WorkflowCanvas
+              workflowId={activeWorkflowId}
+              onNodeSelect={setSelectedStepId}
+            />
+          </div>
         </Panel>
         <PanelResizeHandle className="w-px bg-zinc-800 transition-colors hover:bg-zinc-600" />
-        <Panel defaultSize={25} minSize={20}>
-          <WorkflowSidebar
-            workflowId={activeWorkflowId}
-            selectedStepId={selectedStepId}
-          />
+        <Panel defaultSize={25} minSize={20} style={{ minHeight: 0 }}>
+          <div className="h-full min-h-0 min-w-0 overflow-auto" style={{ height: "100%", minHeight: 200 }}>
+            <WorkflowSidebar
+              workflowId={activeWorkflowId}
+              selectedStepId={selectedStepId}
+            />
+          </div>
         </Panel>
       </PanelGroup>
     </div>
