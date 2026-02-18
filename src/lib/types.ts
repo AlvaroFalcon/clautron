@@ -14,7 +14,34 @@ export interface AgentConfig {
   model: string;
   color: string;
   file_path: string;
+  body: string;
 }
+
+export interface AgentConfigUpdate {
+  name?: string;
+  description?: string;
+  model?: string;
+  color?: string;
+  body?: string;
+}
+
+export interface AgentRelationship {
+  source_agent: string;
+  target_agent: string;
+  workflow_names: string[];
+  edge_count: number;
+}
+
+export const AGENT_COLOR_OPTIONS = [
+  { value: "blue", label: "Blue", hex: "#3b82f6" },
+  { value: "red", label: "Red", hex: "#ef4444" },
+  { value: "green", label: "Green", hex: "#22c55e" },
+  { value: "yellow", label: "Yellow", hex: "#f59e0b" },
+  { value: "purple", label: "Purple", hex: "#a855f7" },
+  { value: "pink", label: "Pink", hex: "#ec4899" },
+  { value: "cyan", label: "Cyan", hex: "#06b6d4" },
+  { value: "gray", label: "Gray", hex: "#71717a" },
+] as const;
 
 export interface AgentSession {
   id: string;

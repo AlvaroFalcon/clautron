@@ -1,4 +1,4 @@
-import { LayoutDashboard, Settings, History, FolderOpen, FileText, GitFork, DollarSign } from "lucide-react";
+import { LayoutDashboard, Settings, History, FolderOpen, FileText, GitFork, DollarSign, Bot } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSpecStore } from "../../stores/specStore";
 import { useWorkflowStore } from "../../stores/workflowStore";
@@ -12,6 +12,7 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "agents", label: "Agents", icon: Bot },
   { id: "specs", label: "Specs", icon: FileText },
   { id: "workflows", label: "Workflows", icon: GitFork },
   { id: "history", label: "History", icon: History },

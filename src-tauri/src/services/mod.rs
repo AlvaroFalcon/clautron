@@ -1,3 +1,5 @@
+pub mod agent_manager;
+pub mod agent_parser;
 pub mod agent_watcher;
 pub mod config_store;
 pub mod git_service;

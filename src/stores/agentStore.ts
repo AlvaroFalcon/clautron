@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   AgentConfig,
+  AgentConfigUpdate,
   AgentSession,
   AgentStatusEvent,
   AgentMessageEvent,
@@ -21,6 +22,7 @@ interface AgentState {
   sessions: Map<string, AgentSession>;
   selectedSessionId: string | null;
   detailSessionId: string | null;
+  selectedAgentPath: string | null;
   logs: Map<string, LogMessage[]>;
 
   // Actions
@@ -33,6 +35,12 @@ interface AgentState {
   openDetail: (sessionId: string) => void;
   closeDetail: () => void;
 
+  // Agent template CRUD
+  selectAgent: (path: string | null) => void;
+  createAgent: (name: string, model: string, description: string, color: string) => Promise<void>;
+  updateAgent: (filePath: string, update: AgentConfigUpdate) => Promise<void>;
+  deleteAgent: (filePath: string) => Promise<void>;
+
   // Event handlers
   handleStatusChange: (event: AgentStatusEvent) => void;
   handleMessage: (event: AgentMessageEvent) => void;
@@ -41,11 +49,12 @@ interface AgentState {
 
 const MAX_LOGS_PER_SESSION = 5000;
 
-export const useAgentStore = create<AgentState>((set) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
   configs: [],
   sessions: new Map(),
   selectedSessionId: null,
   detailSessionId: null,
+  selectedAgentPath: null,
   logs: new Map(),
 
   loadConfigs: async () => {
@@ -88,6 +97,33 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   closeDetail: () => {
     set({ detailSessionId: null });
+  },
+
+  selectAgent: (path) => {
+    set({ selectedAgentPath: path });
+  },
+
+  createAgent: async (name, model, description, color) => {
+    await tauri.createAgentConfig(name, model, description, color);
+    await get().loadConfigs();
+  },
+
+  updateAgent: async (filePath, update) => {
+    const updated = await tauri.updateAgentConfig(filePath, update);
+    set((state) => ({
+      configs: state.configs.map((c) =>
+        c.file_path === filePath ? updated : c,
+      ),
+    }));
+  },
+
+  deleteAgent: async (filePath) => {
+    await tauri.deleteAgentConfig(filePath);
+    set((state) => ({
+      configs: state.configs.filter((c) => c.file_path !== filePath),
+      selectedAgentPath:
+        state.selectedAgentPath === filePath ? null : state.selectedAgentPath,
+    }));
   },
 
   handleStatusChange: (event) => {

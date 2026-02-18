@@ -1,7 +1,7 @@
 // Typed wrappers for Tauri IPC commands
 
 import { invoke } from "@tauri-apps/api/core";
-import type { AgentConfig, AgentSession, AppConfig, ChangedFile, FileDiff, LogEntry, Spec, SpecPriority, SpecUpdate, UnapprovedAgent, Workflow, WorkflowStep, WorkflowEdge } from "./types";
+import type { AgentConfig, AgentConfigUpdate, AgentRelationship, AgentSession, AppConfig, ChangedFile, FileDiff, LogEntry, Spec, SpecPriority, SpecUpdate, UnapprovedAgent, Workflow, WorkflowStep, WorkflowEdge } from "./types";
 
 export async function startAgent(
   name: string,
@@ -90,6 +90,36 @@ export async function approveAgents(
   agents: [string, string][],
 ): Promise<void> {
   return invoke("approve_agents", { agents });
+}
+
+// Agent config CRUD commands
+
+export async function getAgent(filePath: string): Promise<AgentConfig> {
+  return invoke("get_agent", { filePath });
+}
+
+export async function createAgentConfig(
+  name: string,
+  model: string,
+  description: string,
+  color: string,
+): Promise<AgentConfig> {
+  return invoke("create_agent_config", { name, model, description, color });
+}
+
+export async function updateAgentConfig(
+  filePath: string,
+  update: AgentConfigUpdate,
+): Promise<AgentConfig> {
+  return invoke("update_agent_config", { filePath, update });
+}
+
+export async function deleteAgentConfig(filePath: string): Promise<void> {
+  return invoke("delete_agent_config", { filePath });
+}
+
+export async function getAgentRelationships(): Promise<AgentRelationship[]> {
+  return invoke("get_agent_relationships");
 }
 
 // Spec commands

@@ -19,6 +19,7 @@ import { AgentDetailPanel } from "./components/agents/AgentDetailPanel";
 import { StartAgentDialog } from "./components/dashboard/StartAgentDialog";
 import { SpecsView } from "./components/specs/SpecsView";
 import { WorkflowsView } from "./components/workflow/WorkflowsView";
+import { AgentTemplatesView } from "./components/agents/AgentTemplatesView";
 import { Toaster, toast } from "sonner";
 import * as tauri from "./lib/tauri";
 import type { AgentConfigChangedEvent, UnapprovedAgent } from "./lib/types";
@@ -188,6 +189,8 @@ function App() {
           <AgentDetailPanel session={detailSession} onBack={closeDetail} />
         ) : activeView === "dashboard" ? (
           <DashboardView />
+        ) : activeView === "agents" ? (
+          <AgentTemplatesView />
         ) : activeView === "specs" ? (
           <SpecsView />
         ) : activeView === "workflows" ? (

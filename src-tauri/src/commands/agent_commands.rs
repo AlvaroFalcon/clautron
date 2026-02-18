@@ -1,6 +1,9 @@
-use crate::domain::models::{AgentConfig, AgentSession};
+use crate::domain::models::{AgentConfig, AgentConfigUpdate, AgentRelationship, AgentSession};
+use crate::domain::ports::WorkflowRepository;
 use crate::domain::session_manager::SessionManager;
 use crate::error::AppError;
+use crate::services::agent_manager::AgentManager;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tokio::process::Command as TokioCommand;
@@ -124,72 +127,121 @@ pub async fn open_claude_login() -> Result<(), AppError> {
 /// List available agent configurations from .claude/agents/ in the project directory.
 #[tauri::command]
 pub async fn list_agents(
-    session_manager: State<'_, Arc<SessionManager>>,
+    agent_manager: State<'_, Arc<AgentManager>>,
 ) -> Result<Vec<AgentConfig>, AppError> {
-    let project_dir = session_manager
-        .get_project_dir()
+    agent_manager
+        .list_agents()
         .await
-        .unwrap_or_else(|| ".".to_string());
-
-    let agents_dir = std::path::Path::new(&project_dir).join(".claude/agents");
-
-    if !agents_dir.exists() {
-        return Ok(vec![]);
-    }
-
-    let md_files = crate::services::agent_watcher::collect_md_files(&agents_dir);
-    let mut configs = Vec::new();
-
-    for path in md_files {
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Some(config) = parse_agent_frontmatter(&content, &path) {
-                configs.push(config);
-            }
-        }
-    }
-
-    Ok(configs)
+        .map_err(|e| AppError::Process(e))
 }
 
-/// Parse YAML frontmatter from an agent definition file.
-fn parse_agent_frontmatter(
-    content: &str,
-    path: &std::path::Path,
-) -> Option<AgentConfig> {
-    let content = content.trim();
-    if !content.starts_with("---") {
-        return None;
-    }
+/// Get a single agent config by file path.
+#[tauri::command]
+pub async fn get_agent(
+    agent_manager: State<'_, Arc<AgentManager>>,
+    file_path: String,
+) -> Result<AgentConfig, AppError> {
+    agent_manager
+        .get_agent(&file_path)
+        .await
+        .map_err(|e| AppError::Process(e))
+}
 
-    let after_first = &content[3..];
-    let end_idx = after_first.find("---")?;
-    let frontmatter = &after_first[..end_idx];
+/// Create a new agent config file.
+#[tauri::command]
+pub async fn create_agent_config(
+    agent_manager: State<'_, Arc<AgentManager>>,
+    name: String,
+    model: String,
+    description: String,
+    color: String,
+) -> Result<AgentConfig, AppError> {
+    agent_manager
+        .create_agent(name, model, description, color)
+        .await
+        .map_err(|e| AppError::Process(e))
+}
 
-    let mut name = None;
-    let mut description = None;
-    let mut model = None;
-    let mut color = None;
+/// Update an existing agent config.
+#[tauri::command]
+pub async fn update_agent_config(
+    agent_manager: State<'_, Arc<AgentManager>>,
+    file_path: String,
+    update: AgentConfigUpdate,
+) -> Result<AgentConfig, AppError> {
+    agent_manager
+        .update_agent(&file_path, update)
+        .await
+        .map_err(|e| AppError::Process(e))
+}
 
-    for line in frontmatter.lines() {
-        let line = line.trim();
-        if let Some((key, value)) = line.split_once(':') {
-            let key = key.trim();
-            let value = value.trim().trim_matches('"');
-            match key {
-                "name" => name = Some(value.to_string()),
-                "description" => description = Some(value.to_string()),
-                "model" => model = Some(value.to_string()),
-                "color" => color = Some(value.to_string()),
-                _ => {}
+/// Delete an agent config file.
+#[tauri::command]
+pub async fn delete_agent_config(
+    agent_manager: State<'_, Arc<AgentManager>>,
+    file_path: String,
+) -> Result<(), AppError> {
+    agent_manager
+        .delete_agent(&file_path)
+        .await
+        .map_err(|e| AppError::Process(e))
+}
+
+/// Get agent relationships derived from workflow edges.
+#[tauri::command]
+pub async fn get_agent_relationships(
+    workflow_repo: State<'_, Arc<dyn WorkflowRepository>>,
+) -> Result<Vec<AgentRelationship>, AppError> {
+    let workflows = workflow_repo
+        .list_workflows()
+        .await
+        .map_err(AppError::from)?;
+
+    // Map: (source_agent, target_agent) -> { workflow_names, edge_count }
+    let mut rel_map: HashMap<(String, String), (Vec<String>, usize)> = HashMap::new();
+
+    for workflow in &workflows {
+        let steps = workflow_repo
+            .get_steps(&workflow.id)
+            .await
+            .map_err(AppError::from)?;
+        let edges = workflow_repo
+            .get_edges(&workflow.id)
+            .await
+            .map_err(AppError::from)?;
+
+        // Build step_id -> agent_name lookup
+        let step_agents: HashMap<String, String> = steps
+            .iter()
+            .map(|s| (s.id.clone(), s.agent_name.clone()))
+            .collect();
+
+        for edge in &edges {
+            let source_agent = step_agents.get(&edge.source_step_id);
+            let target_agent = step_agents.get(&edge.target_step_id);
+
+            if let (Some(src), Some(tgt)) = (source_agent, target_agent) {
+                let key = (src.clone(), tgt.clone());
+                let entry = rel_map.entry(key).or_insert_with(|| (vec![], 0));
+                if !entry.0.contains(&workflow.name) {
+                    entry.0.push(workflow.name.clone());
+                }
+                entry.1 += 1;
             }
         }
     }
 
-    Some(AgentConfig {
-        name: name?,
-        description: description.unwrap_or_default(),
-        model: model.unwrap_or_else(|| "sonnet".to_string()),
-        color: color.unwrap_or_else(|| "gray".to_string()),
-        file_path: path.to_string_lossy().to_string(),
-    })
+    let relationships: Vec<AgentRelationship> = rel_map
+        .into_iter()
+        .map(|((source_agent, target_agent), (workflow_names, edge_count))| {
+            AgentRelationship {
+                source_agent,
+                target_agent,
+                workflow_names,
+                edge_count,
+            }
+        })
+        .collect();
+
+    Ok(relationships)
 }

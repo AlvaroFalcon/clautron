@@ -13,6 +13,7 @@ use domain::ports::WorkflowRepository;
 use services::workflow_engine::WorkflowEngine;
 use domain::ports::LogRepository;
 use domain::session_manager::SessionManager;
+use services::agent_manager::AgentManager;
 use services::agent_watcher;
 use services::config_store::ConfigStore;
 use services::spec_manager::SpecManager;
@@ -87,6 +88,16 @@ pub fn run() {
     }
 
     let spec_manager_for_state = Arc::clone(&spec_manager);
+
+    // Agent manager
+    let agent_manager = Arc::new(AgentManager::new(Arc::clone(&config_store)));
+    if let Some(ref path) = project_path_for_setup {
+        let am = Arc::clone(&agent_manager);
+        let path = path.clone();
+        tauri::async_runtime::block_on(async move {
+            am.set_project_dir(path).await;
+        });
+    }
 
     // Workflow repository (SQLite)
     let workflow_db_path = data_dir.join("data.db").to_string_lossy().to_string();
@@ -220,6 +231,7 @@ pub fn run() {
         .manage(config_store)
         .manage(config_state)
         .manage(spec_manager_for_state)
+        .manage(agent_manager)
         .manage(workflow_repo_for_state)
         .invoke_handler(tauri::generate_handler![
             agent_commands::start_agent,
@@ -232,6 +244,11 @@ pub fn run() {
             agent_commands::get_project_dir,
             agent_commands::check_claude_auth,
             agent_commands::open_claude_login,
+            agent_commands::get_agent,
+            agent_commands::create_agent_config,
+            agent_commands::update_agent_config,
+            agent_commands::delete_agent_config,
+            agent_commands::get_agent_relationships,
             log_commands::get_session_logs,
             log_commands::get_session_log_count,
             config_commands::get_config,

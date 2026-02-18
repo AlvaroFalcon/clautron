@@ -82,6 +82,27 @@ pub struct AgentConfig {
     pub model: String,
     pub color: String,
     pub file_path: String,
+    #[serde(default)]
+    pub body: String,
+}
+
+/// Fields that can be updated on an agent config.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentConfigUpdate {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub model: Option<String>,
+    pub color: Option<String>,
+    pub body: Option<String>,
+}
+
+/// A relationship between two agents derived from workflow edges.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRelationship {
+    pub source_agent: String,
+    pub target_agent: String,
+    pub workflow_names: Vec<String>,
+    pub edge_count: usize,
 }
 
 // --- Agent Status ---
