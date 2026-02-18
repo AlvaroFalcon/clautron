@@ -249,6 +249,7 @@ pub fn run() {
             agent_commands::update_agent_config,
             agent_commands::delete_agent_config,
             agent_commands::get_agent_relationships,
+            agent_commands::generate_text,
             log_commands::get_session_logs,
             log_commands::get_session_log_count,
             config_commands::get_config,

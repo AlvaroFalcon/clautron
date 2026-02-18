@@ -4,10 +4,11 @@ import { EditorView, keymap } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { Save, X } from "lucide-react";
+import { Save, X, Sparkles, Loader2 } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import type { AgentConfig, AgentConfigUpdate } from "../../lib/types";
 import { AGENT_COLOR_OPTIONS, AGENT_COLORS } from "../../lib/types";
+import { generateText } from "../../lib/tauri";
 
 export function AgentTemplateEditor() {
   const configs = useAgentStore((s) => s.configs);
@@ -61,6 +62,11 @@ function AgentEditorInner({
   const [color, setColor] = useState(config.color);
   const [dirty, setDirty] = useState(false);
 
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [genDescription, setGenDescription] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
   // Debounced save
   const debouncedSave = useCallback(
     (update: AgentConfigUpdate) => {
@@ -87,6 +93,38 @@ function AgentEditorInner({
     },
     [name, description, model, color, debouncedSave],
   );
+
+  const handleGenerate = useCallback(async () => {
+    const desc = genDescription.trim();
+    if (!desc || generating) return;
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const metaPrompt =
+        `Generate a system prompt body for a Claude Code agent.\n\n` +
+        `Agent purpose: ${desc}\n\n` +
+        `Rules:\n` +
+        `- Output ONLY the system prompt body in markdown\n` +
+        `- No YAML frontmatter, no preamble, no "Here is..." intro\n` +
+        `- Define the agent's role, approach, capabilities, and key instructions\n` +
+        `- Use markdown headers and bullet lists where helpful\n` +
+        `- Be specific and actionable, 200-500 words`;
+      const result = await generateText(metaPrompt);
+      // Insert result into the CodeMirror editor
+      const view = viewRef.current;
+      if (view) {
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: result },
+        });
+      }
+      setShowGenerate(false);
+      setGenDescription("");
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  }, [genDescription, generating]);
 
   // CodeMirror setup
   useEffect(() => {
@@ -152,13 +190,76 @@ function AgentEditorInner({
             </span>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-zinc-500 hover:bg-surface-2 hover:text-zinc-300"
-        >
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setShowGenerate((v) => {
+                if (!v) setGenDescription(description); // seed from sidebar field
+                return !v;
+              });
+              setGenError(null);
+            }}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              showGenerate
+                ? "bg-violet-600 text-white"
+                : "border border-zinc-700 text-zinc-400 hover:border-violet-500 hover:text-violet-300"
+            }`}
+          >
+            <Sparkles size={12} />
+            Generate
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-zinc-500 hover:bg-surface-2 hover:text-zinc-300"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
+
+      {/* AI Generate panel */}
+      {showGenerate && (
+        <div className="flex-shrink-0 border-b border-zinc-800 bg-violet-950/20 px-4 py-3">
+          <p className="mb-2 text-[11px] text-violet-300/70">
+            Refine the description if needed — Claude will write the system prompt body.
+          </p>
+          <div className="flex gap-2">
+            <textarea
+              value={genDescription}
+              onChange={(e) => setGenDescription(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleGenerate(); } }}
+              placeholder="e.g. An agent that reviews pull requests for security vulnerabilities..."
+              rows={2}
+              disabled={generating}
+              className="flex-1 resize-none rounded border border-zinc-700 bg-surface-0 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-violet-500 disabled:opacity-50"
+              autoFocus
+            />
+            <div className="flex flex-col gap-1.5">
+              <button
+                onClick={handleGenerate}
+                disabled={!genDescription.trim() || generating}
+                className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-40"
+              >
+                {generating ? (
+                  <><Loader2 size={11} className="animate-spin" /> Generating…</>
+                ) : (
+                  <><Sparkles size={11} /> Generate</>
+                )}
+              </button>
+              <button
+                onClick={() => { setShowGenerate(false); setGenError(null); }}
+                disabled={generating}
+                className="rounded-md px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          {genError && (
+            <p className="mt-2 text-[11px] text-red-400">{genError}</p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Metadata sidebar */}

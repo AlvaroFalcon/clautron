@@ -1,10 +1,12 @@
-import { memo, useMemo, useRef, useEffect } from "react";
+import { memo, useMemo, useRef, useEffect, useState, useCallback } from "react";
 import {
   Bot,
   Wrench,
   CheckCircle2,
   AlertTriangle,
   Info,
+  Send,
+  CornerDownLeft,
 } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { buildConversation, type ConversationItem } from "../../lib/logParser";
@@ -140,6 +142,10 @@ function formatTime(timestamp: string): string {
 
 export function ConversationTab({ sessionId }: Props) {
   const logs = useAgentStore((s) => s.logs);
+  const session = useAgentStore((s) => s.sessions.get(sessionId));
+  const resumeAgent = useAgentStore((s) => s.resumeAgent);
+  const openDetail = useAgentStore((s) => s.openDetail);
+
   const sessionLogs = logs.get(sessionId) ?? [];
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -152,6 +158,20 @@ export function ConversationTab({ sessionId }: Props) {
     el.scrollTop = el.scrollHeight;
   }, [items.length]);
 
+  // Show reply box for terminal states so the user can continue the conversation
+  const isTerminal =
+    session?.status === "completed" ||
+    session?.status === "stopped" ||
+    session?.status === "error";
+
+  const handleReply = useCallback(
+    async (text: string) => {
+      const newSessionId = await resumeAgent(sessionId, text);
+      openDetail(newSessionId);
+    },
+    [sessionId, resumeAgent, openDetail],
+  );
+
   if (items.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center text-xs text-zinc-600">
@@ -161,10 +181,78 @@ export function ConversationTab({ sessionId }: Props) {
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-      {items.map((item, i) => (
-        <ConversationBubble key={i} item={item} />
-      ))}
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+        {items.map((item, i) => (
+          <ConversationBubble key={i} item={item} />
+        ))}
+      </div>
+      {isTerminal && <ReplyBox onSend={handleReply} />}
+    </div>
+  );
+}
+
+function ReplyBox({ onSend }: { onSend: (text: string) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const submit = useCallback(async () => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      await onSend(trimmed);
+      setText("");
+    } finally {
+      setSending(false);
+    }
+  }, [text, sending, onSend]);
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submit();
+      }
+    },
+    [submit],
+  );
+
+  return (
+    <div className="flex-shrink-0 border-t border-zinc-800 bg-surface-1 p-3">
+      <div className="flex items-start gap-2 rounded-lg border border-zinc-700 bg-surface-0 px-3 py-2 focus-within:border-blue-500/60 transition-colors">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Reply to agent… (Enter to send, Shift+Enter for newline)"
+          disabled={sending}
+          rows={2}
+          className="flex-1 resize-none bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none disabled:opacity-50"
+        />
+        <div className="flex flex-shrink-0 flex-col items-end gap-1.5 pt-0.5">
+          <button
+            onClick={submit}
+            disabled={!text.trim() || sending}
+            className="flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-40"
+          >
+            {sending ? (
+              "Resuming…"
+            ) : (
+              <>
+                <Send size={11} />
+                Send
+              </>
+            )}
+          </button>
+          <span className="flex items-center gap-0.5 text-[10px] text-zinc-600">
+            <CornerDownLeft size={9} />
+            Enter
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

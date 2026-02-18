@@ -122,6 +122,10 @@ export async function getAgentRelationships(): Promise<AgentRelationship[]> {
   return invoke("get_agent_relationships");
 }
 
+export async function generateText(prompt: string): Promise<string> {
+  return invoke("generate_text", { prompt });
+}
+
 // Spec commands
 
 export async function listSpecs(): Promise<Spec[]> {

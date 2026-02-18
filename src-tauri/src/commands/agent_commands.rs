@@ -78,6 +78,77 @@ pub async fn get_project_dir(
     Ok(session_manager.get_project_dir().await)
 }
 
+/// One-shot Claude generation: runs `claude --print` with the given prompt and
+/// returns just the final result text. Used for AI-assisted content generation
+/// (e.g. generating agent system prompts) without creating a tracked session.
+#[tauri::command]
+pub async fn generate_text(prompt: String) -> Result<String, AppError> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+    use std::process::Stdio;
+
+    const ENV_ALLOWLIST: &[&str] = &[
+        "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR",
+        "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+        "TERM", "ANTHROPIC_API_KEY", "CLAUDE_CODE_API_KEY",
+    ];
+
+    let work_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+
+    let env_vars: Vec<(String, String)> = ENV_ALLOWLIST
+        .iter()
+        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v)))
+        .collect();
+
+    // P0 Security: args array, never shell interpolation
+    let mut cmd = Command::new("claude");
+    cmd.args(["--print", "--output-format", "stream-json", "--verbose", &prompt]);
+    cmd.current_dir(&work_dir);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::null());
+    cmd.env_clear();
+    for (k, v) in &env_vars {
+        cmd.env(k, v);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| AppError::Process(e.to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::Process("No stdout from claude".into()))?;
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        async {
+            let mut reader = BufReader::new(stdout).lines();
+            let mut result_text = String::new();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if parsed.get("type").and_then(|t| t.as_str()) == Some("result") {
+                        if let Some(text) = parsed.get("result").and_then(|r| r.as_str()) {
+                            result_text = text.to_string();
+                        }
+                    }
+                }
+            }
+            let _ = child.wait().await;
+            result_text
+        },
+    )
+    .await
+    .map_err(|_| AppError::Process("Generation timed out after 120s".into()))?;
+
+    if result.is_empty() {
+        return Err(AppError::Process(
+            "Claude returned an empty result. Check authentication.".into(),
+        ));
+    }
+
+    Ok(result)
+}
+
 /// Check if Claude Code CLI is authenticated.
 #[tauri::command]
 pub async fn check_claude_auth() -> Result<bool, AppError> {
