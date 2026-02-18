@@ -262,3 +262,182 @@ export function extractFileActivity(logs: LogMessage[]): FileActivity[] {
     .map(([path, operations]) => ({ path, operations }))
     .sort((a, b) => b.operations.length - a.operations.length);
 }
+
+// --- Execution Graph ---
+
+export type ExecutionNodeType =
+  | "session-root"
+  | "task"
+  | "bash"
+  | "file-write"
+  | "file-read-cluster"
+  | "result";
+
+export interface ExecutionGraphNode {
+  id: string;
+  nodeType: ExecutionNodeType;
+  timestamp: string;
+  // session-root
+  agentName?: string;
+  model?: string;
+  prompt?: string;
+  sessionStatus?: string;
+  // task
+  taskDescription?: string;
+  taskPrompt?: string;
+  // bash
+  command?: string;
+  // file-write
+  filePath?: string;
+  writeToolName?: string;
+  // file-read-cluster
+  readFiles?: string[];
+  // result
+  resultText?: string;
+  isError?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ExecutionGraphData {
+  nodes: ExecutionGraphNode[];
+  edges: Array<{ id: string; source: string; target: string }>;
+}
+
+export function buildExecutionGraph(
+  logs: Array<{ session_id: string; message_type: string; content: string; timestamp: string }>,
+  session: {
+    agent_name: string;
+    model: string;
+    prompt: string;
+    status: string;
+    started_at: string;
+  },
+): ExecutionGraphData {
+  const nodes: ExecutionGraphNode[] = [];
+
+  // Root node is always present
+  nodes.push({
+    id: "root",
+    nodeType: "session-root",
+    timestamp: session.started_at,
+    agentName: session.agent_name,
+    model: session.model,
+    prompt: session.prompt,
+    sessionStatus: session.status,
+  });
+
+  const dedupedLogs = deduplicateStreamLogs(logs);
+  let counter = 0;
+  const nextId = () => `gn-${++counter}`;
+
+  // Accumulate consecutive reads into a cluster node
+  let pendingReads: string[] = [];
+  let pendingReadsTimestamp = "";
+
+  const flushReads = () => {
+    if (pendingReads.length === 0) return;
+    nodes.push({
+      id: nextId(),
+      nodeType: "file-read-cluster",
+      timestamp: pendingReadsTimestamp,
+      readFiles: [...new Set(pendingReads)],
+    });
+    pendingReads = [];
+    pendingReadsTimestamp = "";
+  };
+
+  for (const log of dedupedLogs) {
+    try {
+      const parsed = JSON.parse(log.content);
+      const topType = parsed?.type;
+
+      if (topType === "assistant") {
+        const blocks = parsed?.message?.content;
+        if (!Array.isArray(blocks)) continue;
+
+        for (const block of blocks) {
+          if (block.type !== "tool_use") continue;
+          const name = (block.name || "").toLowerCase();
+          const input = block.input || {};
+
+          if (name === "task") {
+            flushReads();
+            nodes.push({
+              id: nextId(),
+              nodeType: "task",
+              timestamp: log.timestamp,
+              taskDescription: input.description || "",
+              taskPrompt: input.prompt || "",
+            });
+          } else if (name === "bash") {
+            flushReads();
+            nodes.push({
+              id: nextId(),
+              nodeType: "bash",
+              timestamp: log.timestamp,
+              command: input.command || "",
+            });
+          } else if (
+            name === "write" ||
+            name === "edit" ||
+            name === "multiedit" ||
+            name === "notebookedit"
+          ) {
+            flushReads();
+            nodes.push({
+              id: nextId(),
+              nodeType: "file-write",
+              timestamp: log.timestamp,
+              filePath:
+                input.file_path || input.notebook_path || input.path || "",
+              writeToolName: block.name || name,
+            });
+          } else if (
+            name === "read" ||
+            name === "glob" ||
+            name === "grep" ||
+            name === "webfetch" ||
+            name === "websearch"
+          ) {
+            const path =
+              input.file_path ||
+              input.path ||
+              input.pattern ||
+              input.url ||
+              input.query ||
+              "";
+            pendingReads.push(path);
+            if (!pendingReadsTimestamp) pendingReadsTimestamp = log.timestamp;
+          }
+          // All other tools are omitted from the graph
+        }
+      } else if (topType === "result") {
+        flushReads();
+        const isError =
+          parsed?.subtype === "error" || parsed?.is_error === true;
+        const resultText = (parsed?.result || "").slice(0, 500);
+        if (resultText || isError) {
+          nodes.push({
+            id: nextId(),
+            nodeType: "result",
+            timestamp: log.timestamp,
+            resultText,
+            isError,
+          });
+        }
+      }
+    } catch {
+      // skip unparseable log entries
+    }
+  }
+
+  flushReads();
+
+  const edges = nodes.slice(1).map((node, i) => ({
+    id: `e-${i}`,
+    source: nodes[i].id,
+    target: node.id,
+  }));
+
+  return { nodes, edges };
+}

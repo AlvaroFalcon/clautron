@@ -7,6 +7,7 @@ import {
   Info,
   Square,
   GitBranch,
+  Network,
 } from "lucide-react";
 import type { AgentSession } from "../../lib/types";
 import { AGENT_COLORS } from "../../lib/types";
@@ -17,6 +18,7 @@ import { ToolsTab } from "./ToolsTab";
 import { FilesTab } from "./FilesTab";
 import { InfoTab } from "./InfoTab";
 import { ReviewPanel } from "../review/ReviewPanel";
+import { ExecutionGraphTab } from "./ExecutionGraphTab";
 
 interface Props {
   session: AgentSession;
@@ -27,6 +29,7 @@ const TAB_ITEMS = [
   { value: "conversation", label: "Conversation", icon: MessageSquare },
   { value: "tools", label: "Tools", icon: Wrench },
   { value: "files", label: "Files", icon: FolderOpen },
+  { value: "graph", label: "Graph", icon: Network },
   { value: "review", label: "Review", icon: GitBranch },
   { value: "info", label: "Info", icon: Info },
 ];
@@ -112,6 +115,10 @@ export function AgentDetailPanel({ session, onBack }: Props) {
 
         <Tabs.Content value="files" className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
           <FilesTab sessionId={session.id} />
+        </Tabs.Content>
+
+        <Tabs.Content value="graph" className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
+          <ExecutionGraphTab session={session} />
         </Tabs.Content>
 
         <Tabs.Content value="review" className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
