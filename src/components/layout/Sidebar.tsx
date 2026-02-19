@@ -1,7 +1,9 @@
-import { LayoutDashboard, Settings, History, FolderOpen, FileText, GitFork, DollarSign, Bot } from "lucide-react";
-import { useAgentStore } from "../../stores/agentStore";
+import { LayoutDashboard, Settings, History, FolderOpen, FileText, GitFork, DollarSign, Bot, AlertCircle, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAgentStore, type RateLimitStatus } from "../../stores/agentStore";
 import { useSpecStore } from "../../stores/specStore";
 import { useWorkflowStore } from "../../stores/workflowStore";
+import { QuotaWidget } from "./QuotaWidget";
 
 interface SidebarProps {
   activeView: string;
@@ -28,6 +30,8 @@ export function Sidebar({
 }: SidebarProps) {
   const configs = useAgentStore((s) => s.configs);
   const sessions = useAgentStore((s) => s.sessions);
+  const rateLimitStatus = useAgentStore((s) => s.rateLimitStatus);
+  const clearRateLimit = useAgentStore((s) => s.clearRateLimit);
   const specCount = useSpecStore((s) => s.specs.length);
   const workflowCount = useWorkflowStore((s) => s.workflows.length);
 
@@ -103,9 +107,86 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-zinc-800 p-3 text-xs text-zinc-500">
+        <QuotaWidget />
+        {rateLimitStatus && (
+          <RateLimitBanner
+            rateLimitStatus={rateLimitStatus}
+            onDismiss={clearRateLimit}
+          />
+        )}
         <div>{configs.length} agents configured</div>
         <div>{sessions.size} total sessions</div>
       </div>
     </aside>
+  );
+}
+
+function RateLimitBanner({
+  rateLimitStatus,
+  onDismiss,
+}: {
+  rateLimitStatus: RateLimitStatus;
+  onDismiss: () => void;
+}) {
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rateLimitStatus.resetAt) return;
+
+    function update() {
+      const reset = new Date(rateLimitStatus.resetAt!).getTime();
+      const now = Date.now();
+      const diff = reset - now;
+      if (diff <= 0) {
+        onDismiss();
+        return;
+      }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1_000);
+      setTimeLeft(
+        h > 0
+          ? `${h}h ${m}m`
+          : m > 0
+            ? `${m}m ${s}s`
+            : `${s}s`,
+      );
+    }
+
+    update();
+    const id = setInterval(update, 1_000);
+    return () => clearInterval(id);
+  }, [rateLimitStatus.resetAt, onDismiss]);
+
+  return (
+    <div className="mb-2 rounded-md border border-red-900/50 bg-red-950/30 p-2">
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1.5 text-red-400">
+          <AlertCircle size={11} className="flex-shrink-0 mt-px" />
+          <span className="font-medium">Rate limited</span>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="text-zinc-600 hover:text-zinc-400"
+        >
+          <X size={11} />
+        </button>
+      </div>
+      {rateLimitStatus.resetAt ? (
+        <div className="mt-1 pl-3.5 text-zinc-500">
+          Resets in {timeLeft ?? "…"}
+          <div className="text-[10px] text-zinc-600">
+            {new Date(rateLimitStatus.resetAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1 truncate pl-3.5 text-zinc-500">
+          Check Claude for details
+        </div>
+      )}
+    </div>
   );
 }

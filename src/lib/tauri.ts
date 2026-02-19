@@ -264,3 +264,7 @@ export async function stopWorkflow(id: string): Promise<void> {
 export async function validateWorkflow(id: string): Promise<void> {
   return invoke("validate_workflow", { id });
 }
+
+export async function refreshQuota(): Promise<void> {
+  return invoke("refresh_quota");
+}

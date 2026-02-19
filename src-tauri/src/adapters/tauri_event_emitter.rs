@@ -1,5 +1,5 @@
 use crate::domain::error::DomainError;
-use crate::domain::ports::{EventEmitter, MessageEvent, StatusChangedEvent, UsageUpdateEvent};
+use crate::domain::ports::{EventEmitter, MessageEvent, RateLimitedEvent, StatusChangedEvent, UsageUpdateEvent};
 use tauri::{AppHandle, Emitter};
 
 /// EventEmitter adapter that pushes events via Tauri IPC.
@@ -29,6 +29,12 @@ impl EventEmitter for TauriEventEmitter {
     fn emit_usage_update(&self, event: UsageUpdateEvent) -> Result<(), DomainError> {
         self.app
             .emit("agent:usage-update", event)
+            .map_err(|e| DomainError::EventEmission(e.to_string()))
+    }
+
+    fn emit_rate_limited(&self, event: RateLimitedEvent) -> Result<(), DomainError> {
+        self.app
+            .emit("agent:rate-limited", event)
             .map_err(|e| DomainError::EventEmission(e.to_string()))
     }
 }

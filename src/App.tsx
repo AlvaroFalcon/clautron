@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAgentEvents } from "./hooks/useAgentEvents";
+import { useQuotaEvents } from "./hooks/useQuotaEvents";
 import { useSpecEvents } from "./hooks/useSpecEvents";
 import { useWorkflowEvents } from "./hooks/useWorkflowEvents";
 import { useAgentStore } from "./stores/agentStore";
@@ -26,6 +27,7 @@ import type { AgentConfigChangedEvent, UnapprovedAgent } from "./lib/types";
 
 function App() {
   useAgentEvents();
+  useQuotaEvents();
   useSpecEvents();
   useWorkflowEvents();
 

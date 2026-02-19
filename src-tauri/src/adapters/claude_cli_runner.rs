@@ -5,13 +5,36 @@ use crate::domain::session_manager::SessionManager;
 use crate::domain::stream_parser;
 use async_trait::async_trait;
 use chrono::Utc;
+use regex::Regex;
 use std::collections::HashMap;
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
+
+/// Regex to find ISO 8601 timestamps in rate-limit error messages.
+static ISO_TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?").unwrap()
+});
+
+/// Returns true if the error text indicates a quota/rate-limit (not a transient overload).
+fn is_quota_rate_limit(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    lower.contains("usage limit")
+        || lower.contains("rate_limit_error")
+        || lower.contains("rate limit exceeded")
+        || lower.contains("quota exceeded")
+        || (lower.contains("429") && lower.contains("reset"))
+}
+
+/// Try to extract an ISO 8601 reset timestamp from an error message.
+fn extract_reset_time(text: &str) -> Option<String> {
+    ISO_TIMESTAMP_RE
+        .captures(text)
+        .map(|cap| cap[0].to_string())
+}
 
 /// Env var allowlist for spawned processes (P0 Security #3).
 const ENV_ALLOWLIST: &[&str] = &[
@@ -80,6 +103,28 @@ impl ClaudeCliRunner {
                     if let StreamMessage::Result(ref r) = msg {
                         if r.subtype.as_deref() == Some("error") {
                             final_status = AgentStatus::Error;
+                            // Detect quota rate-limits and emit a dedicated event
+                            if let Some(result_text) =
+                                r.extra.get("result").and_then(|v| v.as_str())
+                            {
+                                if is_quota_rate_limit(result_text) {
+                                    let reset_at = extract_reset_time(result_text);
+                                    sm.on_rate_limited(
+                                        &sid,
+                                        reset_at,
+                                        result_text.to_string(),
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                        // Extract authoritative cost from the result message.
+                        // Claude Code reports cost_usd regardless of success/error.
+                        let cost_usd = r.extra.get("cost_usd")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        if cost_usd > 0.0 {
+                            sm.on_agent_cost(&sid, cost_usd).await;
                         }
                     }
 

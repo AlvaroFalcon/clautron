@@ -8,8 +8,9 @@ use adapters::in_memory_session_repository::InMemorySessionRepository;
 use adapters::sqlite_log_repository::SqliteLogRepository;
 use adapters::tauri_event_emitter::TauriEventEmitter;
 use adapters::sqlite_workflow_repository::SqliteWorkflowRepository;
-use commands::{agent_commands, config_commands, log_commands, review_commands, spec_commands, workflow_commands};
+use commands::{agent_commands, config_commands, log_commands, quota_commands, review_commands, spec_commands, workflow_commands};
 use domain::ports::WorkflowRepository;
+use services::quota_service::{QuotaState, start_poller};
 use services::workflow_engine::WorkflowEngine;
 use domain::ports::LogRepository;
 use domain::session_manager::SessionManager;
@@ -153,12 +154,13 @@ pub fn run() {
 
             // Start FS watchers for .claude/agents/ and specs/ if project is configured
             let sm_for_watcher = Arc::clone(&session_manager);
+            let app_handle_for_watcher = app_handle.clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(project_dir) = sm_for_watcher.get_project_dir().await {
                     let agents_dir =
                         std::path::PathBuf::from(&project_dir).join(".claude/agents");
                     if let Some(watcher) =
-                        agent_watcher::start_watching(app_handle.clone(), agents_dir)
+                        agent_watcher::start_watching(app_handle_for_watcher.clone(), agents_dir)
                     {
                         std::mem::forget(watcher);
                     }
@@ -166,7 +168,7 @@ pub fn run() {
                     let specs_dir =
                         std::path::PathBuf::from(&project_dir).join("specs");
                     if let Some(watcher) =
-                        crate::services::spec_watcher::start_watching(app_handle, specs_dir)
+                        crate::services::spec_watcher::start_watching(app_handle_for_watcher, specs_dir)
                     {
                         std::mem::forget(watcher);
                     }
@@ -180,6 +182,11 @@ pub fn run() {
                 log_repo_for_engine,
             ));
             app.manage(workflow_engine);
+
+            // Quota poller (reads ~/.claude/.credentials.json, polls Anthropic OAuth endpoint)
+            let quota_state = Arc::new(QuotaState::new());
+            app.manage(Arc::clone(&quota_state));
+            start_poller(app_handle.clone(), quota_state);
 
             // Register SessionManager as managed state
             app.manage(session_manager);
@@ -280,6 +287,7 @@ pub fn run() {
             workflow_commands::validate_workflow,
             review_commands::get_changed_files,
             review_commands::get_diff,
+            quota_commands::refresh_quota,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

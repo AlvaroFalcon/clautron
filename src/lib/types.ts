@@ -85,6 +85,8 @@ export interface AgentUsageEvent {
   session_id: string;
   input_tokens: number;
   output_tokens: number;
+  /** Actual cost in USD from Claude Code's result message. Zero for intermediate updates. */
+  cost_usd: number;
 }
 
 // App config (mirrors Rust AppConfig)

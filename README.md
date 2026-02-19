@@ -4,7 +4,7 @@
 
 Clautron is a macOS desktop app for orchestrating, monitoring, and controlling [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. It replaces the workflow of juggling multiple terminal windows with a unified visual command center.
 
-As AI agents become more capable, the bottleneck shifts from writing code to orchestrating, monitoring, and reviewing agent work. This app is purpose-built for that workflow -- define what to build (specs), assign agents, monitor progress, intervene when needed, and review outputs.
+As AI agents become more capable, the bottleneck shifts from writing code to orchestrating, monitoring, and reviewing agent work. This app is purpose-built for that workflow — define what to build (specs), assign agents, monitor progress, intervene when needed, and review outputs.
 
 ---
 
@@ -14,7 +14,7 @@ As AI agents become more capable, the bottleneck shifts from writing code to orc
 - Real-time status cards for all running agents
 - Start, stop, and resume agents from the UI
 - Desktop notifications for completions, errors, and status changes
-- Token usage and cost tracking per agent
+- Live token usage per session (streamed from Claude Code's output)
 
 ### Agent Detail View
 - Full conversation history with streaming updates
@@ -23,7 +23,7 @@ As AI agents become more capable, the bottleneck shifts from writing code to orc
 
 ### Spec-Driven Development
 - Markdown spec editor with YAML frontmatter (powered by CodeMirror 6)
-- Spec lifecycle management: draft -> assigned -> in_progress -> review -> done
+- Spec lifecycle management: `draft` → `assigned` → `in_progress` → `review` → `done`
 - Bind specs to agents and launch execution directly from specs
 
 ### Git Review Panel
@@ -38,14 +38,19 @@ As AI agents become more capable, the bottleneck shifts from writing code to orc
 
 ### Session History & Cost Dashboard
 - Search, filter, and sort past sessions
-- Cost breakdowns by agent and model
-- Full session replay
+- **Accurate cost breakdowns** by agent and model — costs are read directly from Claude Code's `result` stream-json message (the `cost_usd` field it emits at the end of every session), not estimated from token counts
+- Includes cache token costs (creation and read), which estimates miss entirely
+
+### Usage Widget (Sidebar)
+- All-time cost in USD and per-model breakdown
+- Today's session count and message count
+- Data sourced from `~/.claude/stats-cache.json` — a local file Claude Code maintains after every session. No network calls, no authentication required, no Keychain access.
 
 ### Security-First Design
-- No shell injection -- all processes spawned with argument arrays, never interpolated strings
-- Environment variable stripping with minimal allowlist
-- Automatic log redaction for API keys, tokens, and credentials
-- Agent approval system with SHA-256 hash verification
+- No shell injection — all processes spawned with argument arrays, never interpolated strings
+- Environment variable stripping with minimal allowlist (PATH, HOME, and a few others)
+- Automatic log redaction for API keys, tokens, and credentials before SQLite persistence
+- Agent approval system with SHA-256 hash verification — you're prompted before any agent definition is loaded
 - Strict Content Security Policy
 - File permissions enforced (0600 config, 0700 data dir)
 
@@ -69,11 +74,11 @@ As AI agents become more capable, the bottleneck shifts from writing code to orc
 
 **Three strict layers:**
 
-1. **Rust Backend** (`src-tauri/`) -- All process management, file I/O, SQLite, filesystem watchers. The frontend never directly spawns processes or reads files.
-2. **IPC Bridge** -- Tauri commands (request/response) + Tauri events (push-based streaming).
-3. **React Frontend** (`src/`) -- Pure presentation and interaction. Receives data via events, sends commands via `invoke()`.
+1. **Rust Backend** (`src-tauri/`) — All process management, file I/O, SQLite, filesystem watchers. The frontend never directly spawns processes or reads files.
+2. **IPC Bridge** — Tauri commands (request/response) + Tauri events (push-based streaming).
+3. **React Frontend** (`src/`) — Pure presentation and interaction. Receives data via events, sends commands via `invoke()`.
 
-The backend follows **hexagonal architecture** with 5 port traits (AgentRunner, EventEmitter, LogRepository, SessionRepository, WorkflowRepository) and swappable adapters.
+The backend follows **hexagonal architecture** with 5 port traits (`AgentRunner`, `EventEmitter`, `LogRepository`, `SessionRepository`, `WorkflowRepository`) and swappable adapters.
 
 ### Claude Code Integration
 
@@ -86,10 +91,31 @@ claude --print --output-format stream-json --verbose --session-id <uuid> "<promp
 Output is parsed through a three-tier buffering pipeline:
 
 ```
-Claude stdout -> Rust BufReader (JSON per line)
-  -> Ring Buffer (10k entries/agent, batch emit every 100ms)
-  -> React Frontend (requestAnimationFrame batched, virtualized rendering)
+Claude stdout → Rust BufReader (JSON per line)
+  → Ring Buffer (10k entries/agent, batch emit every 100ms)
+  → React Frontend (requestAnimationFrame batched, virtualized rendering)
 ```
+
+**Cost tracking** works by parsing Claude Code's `result` message, which is the final line emitted after every session:
+
+```jsonc
+// Example result message
+{
+  "type": "result",
+  "subtype": "success",
+  "cost_usd": 0.0341,
+  "usage": {
+    "input_tokens": 12480,
+    "output_tokens": 843,
+    "cache_creation_input_tokens": 2100,
+    "cache_read_input_tokens": 8240
+  }
+}
+```
+
+The `cost_usd` value is exact — it's what Claude Code itself reports, not a formula we apply to token counts. It accounts for model pricing, cache discounts, and batch rates automatically.
+
+**Usage widget** data comes from `~/.claude/stats-cache.json`, which Claude Code updates after every session with all-time token/cost/activity stats per model. Reading this file is simpler and more reliable than polling a remote API.
 
 ---
 
@@ -115,14 +141,12 @@ Claude stdout -> Rust BufReader (JSON per line)
 
 ## Prerequisites
 
-- **macOS** (Windows/Linux support planned -- Tauri is cross-platform by design)
+- **macOS** (Windows/Linux support planned — Tauri is cross-platform by design)
 - **Node.js** >= 18
 - **Rust** >= 1.75 (install via [rustup](https://rustup.rs/))
 - **Claude Code CLI** installed and authenticated (`npm install -g @anthropic-ai/claude-code`)
 
 ### System Dependencies (macOS)
-
-Tauri requires some system libraries. Install via Homebrew if you don't have them:
 
 ```bash
 xcode-select --install  # Xcode Command Line Tools
@@ -135,7 +159,7 @@ xcode-select --install  # Xcode Command Line Tools
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/clautron.git
+git clone https://github.com/alvarordgs/clautron.git
 cd clautron
 ```
 
@@ -169,16 +193,15 @@ The output binary will be in `src-tauri/target/release/bundle/`.
 clautron/
 ├── src/                          # React frontend
 │   ├── components/
-│   │   ├── layout/               # Sidebar, WelcomeScreen, CommandPalette
+│   │   ├── layout/               # Sidebar, WelcomeScreen, CommandPalette, QuotaWidget
 │   │   ├── dashboard/            # AgentCard, DashboardView, StartAgentDialog
 │   │   ├── agents/               # AgentDetailPanel, ConversationTab, ToolsTab
 │   │   ├── specs/                # SpecsView, SpecEditor
 │   │   ├── workflow/             # WorkflowCanvas, WorkflowSidebar, AgentNode
 │   │   ├── review/               # ReviewPanel, DiffViewer
-│   │   ├── history/              # SessionHistoryView, CostDashboard
-│   │   └── logs/                 # AgentLogViewer, LogFilter
-│   ├── stores/                   # Zustand stores (agent, spec, workflow)
-│   ├── hooks/                    # useAgentEvents, useSpecEvents, useWorkflowEvents
+│   │   └── history/              # SessionHistoryView, CostDashboard
+│   ├── stores/                   # Zustand stores (agent, spec, workflow, quota)
+│   ├── hooks/                    # useAgentEvents, useSpecEvents, useWorkflowEvents, useQuotaEvents
 │   └── lib/                      # Types, Tauri bindings, formatters
 │
 ├── src-tauri/                    # Rust backend
@@ -186,7 +209,7 @@ clautron/
 │   │   ├── domain/               # Core: SessionManager, ports, models, stream parser
 │   │   ├── adapters/             # Infrastructure: CLI runner, SQLite repos, event emitter
 │   │   ├── commands/             # Tauri IPC handlers
-│   │   ├── services/             # Config, agent watcher, spec manager, workflow engine
+│   │   ├── services/             # Config, agent watcher, spec manager, workflow engine, quota service
 │   │   └── migrations/           # SQLite schema migrations
 │   ├── Cargo.toml
 │   └── tauri.conf.json
@@ -264,7 +287,8 @@ Contributions are welcome! Here's how to get started:
 - [x] Spec-driven development workflow
 - [x] Git diff review panel
 - [x] Visual workflow builder (DAG)
-- [x] Session history and cost tracking
+- [x] Session history and cost dashboard (accurate cost from Claude Code result messages)
+- [x] Usage widget (all-time cost + today's activity from local stats cache)
 - [ ] Cross-platform support (Windows, Linux)
 - [ ] Per-agent filesystem sandboxing
 - [ ] Process resource limits (CPU, memory, timeout)

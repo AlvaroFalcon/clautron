@@ -16,6 +16,13 @@ interface LogMessage {
   timestamp: string;
 }
 
+export interface RateLimitStatus {
+  sessionId: string;
+  resetAt: string | null;   // ISO timestamp if extracted from error text
+  rawMessage: string;
+  detectedAt: string;       // ISO timestamp of when we detected it
+}
+
 interface AgentState {
   // Data
   configs: AgentConfig[];
@@ -24,6 +31,7 @@ interface AgentState {
   detailSessionId: string | null;
   selectedAgentPath: string | null;
   logs: Map<string, LogMessage[]>;
+  rateLimitStatus: RateLimitStatus | null;
 
   // Actions
   loadConfigs: () => Promise<void>;
@@ -45,6 +53,8 @@ interface AgentState {
   handleStatusChange: (event: AgentStatusEvent) => void;
   handleMessage: (event: AgentMessageEvent) => void;
   handleUsageUpdate: (event: AgentUsageEvent) => void;
+  handleRateLimited: (event: { session_id: string; reset_at: string | null; raw_message: string }) => void;
+  clearRateLimit: () => void;
 }
 
 const MAX_LOGS_PER_SESSION = 5000;
@@ -56,6 +66,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   detailSessionId: null,
   selectedAgentPath: null,
   logs: new Map(),
+  rateLimitStatus: null,
 
   loadConfigs: async () => {
     const configs = await tauri.listAgents();
@@ -184,9 +195,26 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           ...existing,
           input_tokens: event.input_tokens,
           output_tokens: event.output_tokens,
+          // Only overwrite cost when the final result message arrives (cost_usd > 0)
+          cost_usd: event.cost_usd > 0 ? event.cost_usd : existing.cost_usd,
         });
       }
       return { sessions };
     });
+  },
+
+  handleRateLimited: (event) => {
+    set({
+      rateLimitStatus: {
+        sessionId: event.session_id,
+        resetAt: event.reset_at,
+        rawMessage: event.raw_message,
+        detectedAt: new Date().toISOString(),
+      },
+    });
+  },
+
+  clearRateLimit: () => {
+    set({ rateLimitStatus: null });
   },
 }));

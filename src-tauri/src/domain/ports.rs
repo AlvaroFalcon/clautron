@@ -75,6 +75,19 @@ pub struct UsageUpdateEvent {
     pub session_id: String,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// Actual cost in USD from Claude Code's result message. Zero for
+    /// intermediate updates; set only when the final result arrives.
+    pub cost_usd: f64,
+}
+
+/// Domain event: Claude quota/rate-limit exceeded.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RateLimitedEvent {
+    pub session_id: String,
+    /// ISO 8601 reset timestamp if parseable from the error message.
+    pub reset_at: Option<String>,
+    /// Raw error text for display.
+    pub raw_message: String,
 }
 
 /// Port: mechanism for emitting domain events to external consumers.
@@ -82,6 +95,7 @@ pub trait EventEmitter: Send + Sync {
     fn emit_status_changed(&self, event: StatusChangedEvent) -> Result<(), DomainError>;
     fn emit_agent_message(&self, event: MessageEvent) -> Result<(), DomainError>;
     fn emit_usage_update(&self, event: UsageUpdateEvent) -> Result<(), DomainError>;
+    fn emit_rate_limited(&self, event: RateLimitedEvent) -> Result<(), DomainError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +152,7 @@ pub trait SessionRepository: Send + Sync {
         input_tokens: u64,
         output_tokens: u64,
     ) -> (u64, u64);
+    async fn update_cost(&self, session_id: &str, cost_usd: f64);
 }
 
 // ---------------------------------------------------------------------------

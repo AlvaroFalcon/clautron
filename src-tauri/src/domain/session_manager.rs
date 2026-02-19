@@ -1,8 +1,8 @@
 use super::error::DomainError;
 use super::models::{AgentSession, AgentStatus};
 use super::ports::{
-    AgentRunner, EventEmitter, LogRepository, MessageEvent, ResumeConfig, SessionRepository,
-    SpawnConfig, StatusChangedEvent, UsageUpdateEvent,
+    AgentRunner, EventEmitter, LogRepository, MessageEvent, RateLimitedEvent, ResumeConfig,
+    SessionRepository, SpawnConfig, StatusChangedEvent, UsageUpdateEvent,
 };
 use chrono::Utc;
 use std::sync::Arc;
@@ -268,7 +268,7 @@ impl SessionManager {
             .await;
     }
 
-    /// Called when token usage is extracted from an assistant message.
+    /// Called when token usage is extracted from an intermediate assistant message.
     pub async fn on_agent_usage(
         &self,
         session_id: &str,
@@ -284,6 +284,35 @@ impl SessionManager {
             session_id: session_id.to_string(),
             input_tokens: total_in,
             output_tokens: total_out,
+            cost_usd: 0.0,
+        });
+    }
+
+    /// Called with the authoritative cost from the final Result message.
+    pub async fn on_agent_cost(&self, session_id: &str, cost_usd: f64) {
+        self.sessions.update_cost(session_id, cost_usd).await;
+
+        if let Some(session) = self.sessions.get(session_id).await {
+            let _ = self.emitter.emit_usage_update(UsageUpdateEvent {
+                session_id: session_id.to_string(),
+                input_tokens: session.input_tokens,
+                output_tokens: session.output_tokens,
+                cost_usd,
+            });
+        }
+    }
+
+    /// Called when Claude's quota/rate-limit is exceeded.
+    pub async fn on_rate_limited(
+        &self,
+        session_id: &str,
+        reset_at: Option<String>,
+        raw_message: String,
+    ) {
+        let _ = self.emitter.emit_rate_limited(RateLimitedEvent {
+            session_id: session_id.to_string(),
+            reset_at,
+            raw_message,
         });
     }
 

@@ -3,22 +3,6 @@ import { DollarSign, Cpu, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { formatTokens } from "../../lib/formatters";
 import { AGENT_COLORS } from "../../lib/types";
-import type { AgentSession } from "../../lib/types";
-
-// Rough cost estimates per model (per million tokens)
-const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  opus: { input: 15, output: 75 },
-  sonnet: { input: 3, output: 15 },
-  haiku: { input: 0.25, output: 1.25 },
-};
-
-function estimateCost(session: AgentSession): number {
-  const costs = MODEL_COSTS[session.model] ?? MODEL_COSTS.sonnet;
-  return (
-    (session.input_tokens / 1_000_000) * costs.input +
-    (session.output_tokens / 1_000_000) * costs.output
-  );
-}
 
 function getAgentColor(name: string): string {
   if (name.includes("architect")) return AGENT_COLORS.red;
@@ -44,7 +28,7 @@ export function CostDashboard() {
     for (const s of allSessions) {
       inputTokens += s.input_tokens;
       outputTokens += s.output_tokens;
-      totalCost += estimateCost(s);
+      totalCost += s.cost_usd;
     }
 
     return { inputTokens, outputTokens, totalCost, sessionCount: allSessions.length };
@@ -66,7 +50,7 @@ export function CostDashboard() {
       };
       existing.inputTokens += s.input_tokens;
       existing.outputTokens += s.output_tokens;
-      existing.cost += estimateCost(s);
+      existing.cost += s.cost_usd;
       existing.count += 1;
       map.set(s.agent_name, existing);
     }
@@ -92,7 +76,7 @@ export function CostDashboard() {
       };
       existing.inputTokens += s.input_tokens;
       existing.outputTokens += s.output_tokens;
-      existing.cost += estimateCost(s);
+      existing.cost += s.cost_usd;
       existing.count += 1;
       map.set(model, existing);
     }
@@ -226,8 +210,7 @@ export function CostDashboard() {
         </div>
 
         <p className="mt-6 text-[10px] text-zinc-600">
-          Cost estimates are approximate based on standard API pricing. Actual
-          costs depend on your billing plan.
+          Costs reported directly by Claude Code from session result messages.
         </p>
       </div>
     </div>

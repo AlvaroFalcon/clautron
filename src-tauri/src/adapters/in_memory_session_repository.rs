@@ -61,4 +61,10 @@ impl SessionRepository for InMemorySessionRepository {
             (0, 0)
         }
     }
+
+    async fn update_cost(&self, session_id: &str, cost_usd: f64) {
+        if let Some(s) = self.sessions.write().await.get_mut(session_id) {
+            s.cost_usd = cost_usd;
+        }
+    }
 }

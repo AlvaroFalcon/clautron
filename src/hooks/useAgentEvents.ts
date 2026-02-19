@@ -18,6 +18,7 @@ export function useAgentEvents() {
   const handleStatusChange = useAgentStore((s) => s.handleStatusChange);
   const handleMessage = useAgentStore((s) => s.handleMessage);
   const handleUsageUpdate = useAgentStore((s) => s.handleUsageUpdate);
+  const handleRateLimited = useAgentStore((s) => s.handleRateLimited);
 
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
@@ -69,6 +70,24 @@ export function useAgentEvents() {
         },
       );
       unlisteners.push(unlisten3);
+
+      const unlisten4 = await listen<{
+        session_id: string;
+        reset_at: string | null;
+        raw_message: string;
+      }>("agent:rate-limited", (event) => {
+        handleRateLimited(event.payload);
+        if (permissionGranted) {
+          const resetMsg = event.payload.reset_at
+            ? ` Resets at ${new Date(event.payload.reset_at).toLocaleTimeString()}.`
+            : "";
+          sendNotification({
+            title: "Claude Quota Exceeded",
+            body: `Usage limit reached.${resetMsg}`,
+          });
+        }
+      });
+      unlisteners.push(unlisten4);
     }
 
     setup();
@@ -76,5 +95,5 @@ export function useAgentEvents() {
     return () => {
       unlisteners.forEach((fn) => fn());
     };
-  }, [handleStatusChange, handleMessage, handleUsageUpdate]);
+  }, [handleStatusChange, handleMessage, handleUsageUpdate, handleRateLimited]);
 }
